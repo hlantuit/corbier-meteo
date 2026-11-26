@@ -62,31 +62,48 @@ def scale_offset(asset, item):
 def main():
     end = dt.datetime.utcnow(); start = end - dt.timedelta(days=20)
     body = {'collections': ['sentinel-2-l2a'], 'bbox': list(AOI), 'datetime': f'{start:%Y-%m-%dT%H:%M:%SZ}/{end:%Y-%m-%dT%H:%M:%SZ}',
-            'limit': 40, 'query': {'eo:cloud_cover': {'lt': 85}}, 'sortby': [{'field': 'properties.datetime', 'direction': 'desc'}]}
+            'limit': 60, 'query': {'eo:cloud_cover': {'lt': 85}}, 'sortby': [{'field': 'properties.datetime', 'direction': 'desc'}]}
     items = requests.post(STAC, json=body, timeout=60).json().get('features', [])
     print('items', len(items))
     dst_t, w, h = grid()
+    # The area straddles Sentinel-2 tiles (UTM zones 31 and 32): mosaic all tiles of the same pass
+    passes = {}
     for it in items:
-        bb = it.get('bbox')
-        if bb and not (bb[0] <= AOI[0] and bb[1] <= AOI[1] and bb[2] >= AOI[2] and bb[3] >= AOI[3]):
-            continue  # scene does not cover the whole area
-        a = it['assets']
-        try:
-            scl = read_to_grid(a['scl']['href'], dst_t, w, h, Resampling.nearest)[0]
-        except Exception as e:
-            print('scl failed', it['id'], e); continue
+        key = (it['properties']['datetime'][:10], it['properties'].get('platform', ''))
+        passes.setdefault(key, []).append(it)
+    for key in sorted(passes, reverse=True):
+        tiles = sorted(passes[key], key=lambda it: it['properties'].get('eo:cloud_cover', 100))
+        scl = np.zeros((h, w), dtype=np.float32); owner = np.full((h, w), -1, dtype=np.int16)
+        for k, it in enumerate(tiles):
+            try:
+                sc = read_to_grid(it['assets']['scl']['href'], dst_t, w, h, Resampling.nearest)[0]
+            except Exception as e:
+                print('scl failed', it['id'], e); continue
+            fill = (scl == 0) & (sc > 0)
+            scl[fill] = sc[fill]; owner[fill] = k
         valid = scl > 0
         cloud = np.isin(scl, [3, 8, 9, 10])
-        if valid.mean() < 0.95:
-            continue
+        if valid.mean() < 0.97:
+            print(key, f'coverage {valid.mean():.2f}, skipped'); continue
         clear = 1 - cloud[valid].mean()
-        print(it['id'], it['properties']['datetime'][:10], f'clear {clear:.2f}')
+        print(key, len(tiles), 'tiles', f'clear {clear:.2f}')
         if clear < 0.6:
             continue
-        g = read_to_grid(a['green']['href'], dst_t, w, h)[0]
-        s = read_to_grid(a['swir16']['href'], dst_t, w, h)[0]
-        gs, go = scale_offset(a['green'], it); ss, so = scale_offset(a['swir16'], it)
-        G = g * gs + go; S = s * ss + so
+        G = np.zeros((h, w), dtype=np.float32); S = np.zeros((h, w), dtype=np.float32); RGB = np.zeros((3, h, w), dtype=np.float32)
+        for k, it in enumerate(tiles):
+            m = owner == k
+            if not m.any():
+                continue
+            a = it['assets']
+            g = read_to_grid(a['green']['href'], dst_t, w, h)[0]
+            sw = read_to_grid(a['swir16']['href'], dst_t, w, h)[0]
+            gs, go = scale_offset(a['green'], it); ss, so = scale_offset(a['swir16'], it)
+            G[m] = (g * gs + go)[m]; S[m] = (sw * ss + so)[m]
+            try:
+                rgb = read_to_grid(a['visual']['href'], dst_t, w, h, Resampling.bilinear, bands=[1, 2, 3])
+                RGB[:, m] = rgb[:, m]
+            except Exception as e:
+                print('rgb failed', it['id'], e)
         ndsi = (G - S) / np.maximum(G + S, 1e-6)
         snow = (((ndsi > 0.40) & (G > 0.10)) | (scl == 11)) & ~cloud & valid
         rgba = np.zeros((h, w, 4), dtype=np.uint8)
@@ -94,13 +111,9 @@ def main():
         rgba[cloud & valid] = (120, 132, 150, 110)
         os.makedirs(OUT, exist_ok=True)
         Image.fromarray(rgba, 'RGBA').save(os.path.join(OUT, 's2-snow.png'), optimize=True)
-        try:
-            rgb = read_to_grid(a['visual']['href'], dst_t, w, h, Resampling.bilinear, bands=[1, 2, 3])
-            img = np.clip(np.moveaxis(rgb, 0, -1), 0, 255).astype(np.uint8)
-            Image.fromarray(img, 'RGB').save(os.path.join(OUT, 's2-rgb.jpg'), quality=82)
-        except Exception as e:
-            print('rgb failed', e)
-        meta = {'date': it['properties']['datetime'], 'id': it['id'], 'clear': round(float(clear), 3),
+        img = np.clip(np.moveaxis(RGB, 0, -1), 0, 255).astype(np.uint8)
+        Image.fromarray(img, 'RGB').save(os.path.join(OUT, 's2-rgb.jpg'), quality=82)
+        meta = {'date': tiles[0]['properties']['datetime'], 'id': ' + '.join(it['id'] for it in tiles), 'clear': round(float(clear), 3),
                 'snow_fraction': round(float(snow[valid & ~cloud].mean()), 3),
                 'coordinates': [[AOI[0], AOI[3]], [AOI[2], AOI[3]], [AOI[2], AOI[1]], [AOI[0], AOI[1]]],
                 'resolution_m': RES, 'generated': dt.datetime.utcnow().isoformat() + 'Z'}
@@ -108,7 +121,7 @@ def main():
             json.dump(meta, f)
         print('wrote', meta)
         return 0
-    print('no clear scene in the last 20 days; keeping the previous image')
+    print('no clear, complete pass in the last 20 days; keeping the previous image')
     return 0
 
 
