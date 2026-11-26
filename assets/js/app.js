@@ -122,7 +122,7 @@ function renderBulletin() {
   try {
     S.digest = B.buildDigest({ now: S.now, cons: S.cons, days: S.days, freshAt: (z, d) => atZ(freshProfile(d, false), z), interp: atZ, ens: S.ensStats, pack: S.pack, obsHs: latestDepth() });
   } catch (e) { console.error('bulletin', e); return; }
-  const ai = S.ai && S.ai[getLang()] && Date.now() - Date.parse(S.ai.generated) < 6 * HOUR ? S.ai : null;
+  const ai = S.ai && S.ai[getLang()] && Date.now() - Date.parse(S.ai.generated) < 3 * HOUR ? S.ai : null;
   const text = ai ? ai[getLang()] : B.writeBulletin(S.digest, getLang());
   if (!text) return;
   $('bulletin').hidden = false;
@@ -442,13 +442,13 @@ function renderMethods() {
     <p><b>Vérification.</b> Les prévisions passées (archives Open-Meteo, échéances J0 à J+7) sont comparées chaque semaine aux mesures Météo-France, de novembre à avril : neige fraîche relevée chaque matin au Corbier (1 585 m) pendant la saison de ski, température et précipitations horaires de la station automatique de Saint-Jean-d’Arves (1 573 m, 4 km). Deux hivers seulement : les classements restent indicatifs.</p>
     <p><b>Neige au sol.</b> Un petit modèle de manteau neigeux tourne heure par heure depuis le 1<sup>er</sup> octobre, par tranches de 100 m d’altitude : chutes de neige, fonte par degrés-jours, tassement. Il est forcé par les analyses des modèles (ICON, AROME, IFS) pour le passé, puis par le consensus ci-dessus pour les 15 prochains jours. Un facteur de précipitations et un décalage de température sont ajustés pour reproduire les hauteurs de neige mesurées chaque matin par Météo-France autour du Corbier (Saint-Jean-d’Arves, Saint-Sorlin-d’Arves, Albiez, Valmeinier, Val Thorens, Saint-Martin-de-Belleville, et Le Corbier en saison), puis le manteau est recalé sur les dernières mesures. Les valeurs sont celles d’une pente moyenne : plus en adret, moins en ubac.</p>
     <p><b>Carte.</b> Le relief est le RGE ALTI de l’IGN, décodé dans le navigateur. Les couleurs de neige suivent l’altitude, à partir des mêmes calculs. Les bâtiments et remontées viennent de la BD TOPO, les pistes d’OpenStreetMap ; l’image satellite est la dernière scène Sentinel-2 assez dégagée.</p>
-    <p><b>Bulletin.</b> Le texte en haut de page est rédigé par un modèle de langage (GitHub Models) toutes les trois heures, à partir des seuls chiffres de cette page. S’il date de plus de six heures, la page le remplace par un bulletin généré directement à partir des prévisions.</p>` : `
+    <p><b>Bulletin.</b> Le texte en haut de page est rédigé par un modèle de langage (GitHub Models) toutes les heures, à partir des seuls chiffres de cette page. S’il date de plus de trois heures, la page le remplace par un bulletin généré directement à partir des prévisions.</p>` : `
     <p><b>Forecast.</b> Twelve models (AROME HD, ICON-CH1/CH2, ICON-D2, ICON-2I, ICON-EU, ARPEGE, IFS, AIFS, UKMO, GFS…) are read live through Open-Meteo for the Le Corbier snow front. Each one first has its own temperature bias removed, hour by hour and lead time by lead time. Each is then weighted by its local score: 1/error² for temperature, ETS² for precipitation.</p>
     <p><b>Snow.</b> The snow share of precipitation comes from the model’s rain–snow line when it provides one, otherwise from its freezing level, otherwise from wet-bulb temperature. Fresh snow depth uses a temperature-dependent density (Hedstrom &amp; Pomeroy, 1998). No precipitation gradient with elevation is assumed.</p>
     <p><b>Verification.</b> Past forecasts (Open-Meteo archive, lead days 0 to 7) are compared every week with Météo-France measurements, November to April: fresh snow observed every morning at Le Corbier (1,585 m) during the ski season, and hourly temperature and precipitation from the automatic station at Saint-Jean-d’Arves (1,573 m, 4 km away). Only two winters so far: rankings are indicative.</p>
     <p><b>Snow on the ground.</b> A small snowpack model runs hourly from 1 October in 100 m elevation bands: snowfall, degree-day melt, settling. It is driven by the models’ analyses (ICON, AROME, IFS) for the past and by the consensus above for the next 15 days. A precipitation factor and a temperature offset are fitted to reproduce the snow depths measured every morning by Météo-France around Le Corbier (Saint-Jean-d’Arves, Saint-Sorlin-d’Arves, Albiez, Valmeinier, Val Thorens, Saint-Martin-de-Belleville, and Le Corbier in season); the snowpack is then re-anchored on the latest measurements. Values are for an average slope: less on sunny slopes, more on shady ones.</p>
     <p><b>Map.</b> The terrain is IGN’s RGE ALTI, decoded in the browser. Snow colours follow elevation, from the same calculations. Buildings and lifts come from BD TOPO, pistes from OpenStreetMap; the satellite image is the latest reasonably clear Sentinel-2 scene.</p>
-    <p><b>Bulletin.</b> The text at the top of the page is written by a language model (GitHub Models) every three hours, from this page’s numbers only. If it is more than six hours old, the page replaces it with a bulletin generated directly from the forecasts.</p>`;
+    <p><b>Bulletin.</b> The text at the top of the page is written by a language model (GitHub Models) every hour, from this page’s numbers only. If it is more than three hours old, the page replaces it with a bulletin generated directly from the forecasts.</p>`;
   $('build-info').textContent = fr() ? `Page générée dans votre navigateur le ${new Date(S.now).toLocaleString('fr-FR', { timeZone: 'Europe/Paris' })}.` : `Page generated in your browser on ${new Date(S.now).toLocaleString('en-GB', { timeZone: 'Europe/Paris' })}.`;
 }
 
@@ -625,6 +625,28 @@ async function main() {
   const links = [...document.querySelectorAll('.nav a')];
   const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id)); }), { rootMargin: '-40% 0px -55% 0px' });
   ['now', 'h48', 'd15', 'models', 'season', 'cams', 'archive'].forEach(id => io.observe($(id)));
+  // keep a page left open current: everything live is fetched again every 30 minutes while it is visible
+  setInterval(() => { if (!document.hidden && Date.now() - S.now > REFRESH) refresh(); }, 60e3);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - S.now > REFRESH) refresh(); });
+}
+
+const REFRESH = 30 * 60e3;
+let refreshing = false;
+async function refresh() {
+  if (refreshing) return; refreshing = true;
+  try {
+    const now = Date.now(); const start = SP.seasonStart(now);
+    const histP = D.fetchHistory(start, now), snowP = D.fetchSnowObs(start, now);
+    const [fc, obs, obsC, ai] = await Promise.all([D.fetchModels(), D.fetchObs('73242003', 168).catch(() => S.obs), D.fetchObs('73318400', 8).catch(() => S.obsC), D.fetchBaked('bulletin.json')]);
+    S.now = now; S.obs = obs; S.obsC = obsC; if (ai) S.ai = ai;
+    S.fc = D.applyCalibration(fc, S.calib, S.now);
+    computeConsensus(); computeBands();
+    const [h, s] = await Promise.allSettled([histP, snowP]);
+    if (h.status === 'fulfilled') runPack(h.value, s.status === 'fulfilled' ? s.value : []);
+    S.ens = null;
+    renderAll(); render15();
+  } catch (e) { console.warn('refresh', e); S.now = Date.now() - REFRESH + 5 * 60e3; } // retry in 5 minutes
+  finally { refreshing = false; }
 }
 
 main();

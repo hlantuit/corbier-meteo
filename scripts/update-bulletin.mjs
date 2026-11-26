@@ -1,4 +1,4 @@
-// AI-written bulletin for the top of the page, refreshed every 3 hours by the GitHub Action.
+// AI-written bulletin for the top of the page, refreshed every hour by the GitHub Action.
 // It recomputes exactly what the page shows (calibrated multi-model consensus, ECMWF ensemble, snowpack model)
 // with the page's own modules, condenses it into a digest, and asks a language model on GitHub Models
 // (free with the workflow's GITHUB_TOKEN, permission `models: read`) to phrase it in French and English.
@@ -71,7 +71,7 @@ if (!process.env.GITHUB_TOKEN) { log('no GITHUB_TOKEN: nothing written'); proces
 for (const model of MODELS) {
   try {
     const fr = await ask(model, 'fr'); const en = await ask(model, 'en');
-    fs.writeFileSync('data/bulletin.json', JSON.stringify({ generated: new Date().toISOString(), model: model.split('/')[1], fr, en, draft, digest }, null, 1));
+    fs.writeFileSync('data/bulletin.json', JSON.stringify({ generated: new Date().toISOString(), model: model.split('/')[1], fr, en, draft, digest }));
     log('written with', model); log(fr);
     process.exit(0);
   } catch (e) { log(model, 'failed:', e.message); }

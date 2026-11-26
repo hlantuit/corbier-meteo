@@ -6,7 +6,7 @@ A snow and weather observatory for **Le Corbier (Les Sybelles, Savoie)**, publis
 
 ## What it does
 
-- **Bulletin:** a short text at the top of the page on the next days, always ending with the 14-day trend. It is written by a language model on GitHub Models every 3 hours (free with the workflow's own token) from the page's numbers; if it is older than 6 hours, the browser writes one from the live forecast instead.
+- **Bulletin:** a short text at the top of the page on the next days, always ending with the 14-day trend. It is written by a language model on GitHub Models every hour (free with the workflow's own token) from the page's numbers; if it is older than 3 hours, the browser writes one from the live forecast instead.
 - **Now:** a relief map built from IGN's RGE ALTI, with buildings and lifts from BD TOPO, pistes from OpenStreetMap, and a 3D fly-around. A skipass-style strip of 15 days paints the terrain with forecast fresh snow (per day or cumulative, with a play button), with the snow on the ground, or with the rain–snow line hour by hour. The latest clear Sentinel-2 image can be laid on top.
 - **Snow on the ground:** a snowpack model by 100 m elevation band (snowfall, degree-day melt, settling) runs from 1 October, driven by the models' analyses and then by the forecast. It is fitted to the snow depths measured every morning at seven Météo-France stations around Le Corbier (1,440–2,280 m) and re-anchored on the latest measurements.
 - **48 h:** a meteogram from twelve models (AROME HD, ICON-CH1/CH2, ICON-D2, ICON-2I, ICON-EU, ARPEGE, IFS, AIFS, UKMO, GFS). Each model is **corrected for its own local temperature bias** (by lead time and hour of day), then blended with **weights from its local score**. Also shows fresh snow by elevation, from 1,300 m to 2,430 m.
@@ -41,12 +41,14 @@ The key is only used inside the Action and never reaches the web page. Without i
 
 | When | What |
 |---|---|
-| Daily 05:17 | ERA5 archive, station snow depth → `data/climate.json` |
-| Daily 11:43 | Sentinel-2 snow map → `data/snow/` |
-| Mondays 03:41 | Model verification, biases and weights → `data/verification.json` |
+| Every hour (:07) | AI-written bulletin (GitHub Models) → `data/bulletin.json` |
+| Daily 05:17 and 17:17 | ERA5 archive, station snow depth → `data/climate.json` |
+| Daily 11:43 and 15:43 | Sentinel-2 image → `data/snow/` |
+| Mondays and Thursdays 03:41 | Model verification, biases and weights → `data/verification.json` |
 | 2nd of the month | Buildings, lifts, pistes → `data/*.geojson` |
 | 14th of the month | C3S multi-system seasonal forecast → `data/seasonal-c3s.json` |
-| Every 3 hours | AI-written bulletin (GitHub Models) → `data/bulletin.json` |
+
+Forecasts, observations and the snowpack model are fetched live by each visitor's browser, and again every 30 minutes while the page stays open.
 
 ## Methods in brief
 
