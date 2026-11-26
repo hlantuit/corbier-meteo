@@ -274,7 +274,7 @@ async function loadVectors(map) {
     let fc = await baked('buildings.geojson');
     if (!fc) {
       try {
-        const j = await (await fetch(wfs('BDTOPO_V3:batiment', '45.222,6.240,45.262,6.300', 'geometrie,hauteur,nombre_d_etages,usage_1'))).json();
+        const j = await (await fetch(wfs('BDTOPO_V3:batiment', '45.195,6.195,45.305,6.315', 'geometrie,hauteur,nombre_d_etages,usage_1'))).json();
         fc = { type: 'FeatureCollection', features: j.features.map(f => ({ type: 'Feature', geometry: f.geometry, properties: { h: f.properties.hauteur || (f.properties.nombre_d_etages ? f.properties.nombre_d_etages * 3 : 6), u: f.properties.usage_1 } })) };
       } catch (e) { console.warn('buildings', e); }
     }

@@ -15,9 +15,11 @@ export const SITE = {
     { z: 2430, fr: "L'Ouillon", en: "L'Ouillon" },
   ],
   // Météo-France automatic stations used for observations and verification
+  // Le Corbier: manual snow observations (06 and 12 UTC) during the ski season, at the resort itself.
+  // Saint-Jean-d'Arves: automatic hourly station 4 km away, same elevation, all year (temperature, precipitation, snow depth).
   stations: [
-    { id: '73242003', name: "Saint-Jean-d'Arves", elev: 1573, lat: 45.206833, lon: 6.278833, primary: true },
-    { id: '73280001', name: "Saint-Sorlin-d'Arves", elev: 1694, lat: 45.224, lon: 6.216333 },
+    { id: '73318400', name: 'Le Corbier', elev: 1585, lat: 45.243333, lon: 6.266667, kind: 'nivo' },
+    { id: '73242003', name: "Saint-Jean-d'Arves", elev: 1573, lat: 45.206833, lon: 6.278833, kind: 'auto' },
   ],
   map: {
     center: [6.2470, 45.2390],
@@ -34,6 +36,8 @@ export const SITE = {
     { name: 'Pointe du Corbier', lat: 45.2343, lon: 6.2434, z: 2265, kind: 'peak' },
     { name: "L'Ouillon", lat: 45.2395, lon: 6.2150, z: 2426, kind: 'peak' },
     { name: 'Le Grand Truc', lat: 45.2743, lon: 6.2564, z: 2206, kind: 'peak' },
+    { name: 'Les Bottières', lat: 45.2672, lon: 6.2984, z: 1267, kind: 'hamlet' },
+    { name: 'Saint-Colomban-des-Villards', lat: 45.2941, lon: 6.2268, z: 1100, kind: 'hamlet' },
   ],
 };
 

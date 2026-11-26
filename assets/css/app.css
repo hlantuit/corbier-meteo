@@ -214,14 +214,14 @@ h2 { font-size: clamp(30px, 4vw, 46px); line-height: 1.05; letter-spacing: -0.02
 .findings .h { display: block; color: var(--glacier); font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; margin-bottom: 4px; }
 
 /* Webcams */
-.cams { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
-.cam { display: block; position: relative; aspect-ratio: 16 / 10; border-radius: var(--radius-s); overflow: hidden; border: 1px solid var(--line); background: linear-gradient(160deg, #13223a, #0a1120); color: var(--ink); }
-.cam:hover { text-decoration: none; border-color: var(--line-2); }
-.cam .art { position: absolute; inset: 0; }
-.cam .meta { position: absolute; left: 14px; right: 14px; bottom: 12px; }
-.cam .meta .t { font-weight: 700; font-size: 14px; }
-.cam .meta .s { color: var(--ink-2); font-size: 12px; }
-.cam .go { position: absolute; top: 12px; right: 12px; font-size: 11px; font-weight: 800; letter-spacing: .12em; padding: 4px 8px; border-radius: 999px; background: rgba(255, 255, 255, .1); }
+.cams { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.cam { position: relative; margin: 0; aspect-ratio: 16 / 10; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line-2); background: linear-gradient(160deg, #13223a, #0a1120); box-shadow: var(--shadow); }
+.cam iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.cam figcaption { position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 28px 16px 12px; background: linear-gradient(180deg, transparent, rgba(5, 8, 15, .82)); pointer-events: none; }
+.cam figcaption .t { display: block; font-weight: 700; font-size: 14.5px; }
+.cam figcaption .s { display: block; color: var(--ink-2); font-size: 12px; }
+.cam .go { pointer-events: auto; font-size: 11.5px; font-weight: 800; letter-spacing: .06em; padding: 6px 10px; border-radius: 999px; background: rgba(255, 255, 255, .12); color: var(--ink); white-space: nowrap; }
+.cam .go:hover { background: rgba(255, 255, 255, .22); text-decoration: none; }
 
 /* Stripes */
 .stripes { display: flex; height: 120px; border-radius: 14px; overflow: hidden; }
@@ -239,7 +239,6 @@ footer p { margin: 0 0 8px; }
 @media (max-width: 1100px) {
   .grid.cols-12 > * { grid-column: span 12; }
   .grid.cols-3 { grid-template-columns: 1fr; }
-  .cams { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .timeline { width: calc(100% - 28px); bottom: 84px; }
 }

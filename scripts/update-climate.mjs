@@ -10,10 +10,19 @@ const j = await getJSON(url);
 log('archive days:', j.daily.time.length);
 const C = Cc.buildClimate(j.daily);
 
-// Station snow depth: the last four winters
+// Measured snow depth: Le Corbier's own observations (ski season), last four winters.
+// Until this season's first report, the current winter comes from Saint-Jean-d'Arves (automatic, 4 km away).
 const y = new Date().getUTCFullYear(); const since = `${y - 4}093023`;
-const hourly = await fetchStationHourly('73242003', since);
-C.station = { id: '73242003', name: "Saint-Jean-d'Arves", elev: 1573, seasons: Cc.stationSeasons(hourly, 4) };
+const corbier = await fetchStationHourly('73318400', since);
+const seasons = Cc.stationSeasons(corbier, 4).map(s => ({ ...s, current: false, source: 'nivo' }));
+const curWinter = new Date().getUTCMonth() >= 7 ? y + 1 : y;
+if (!seasons.some(s => s.winter === curWinter)) {
+  const auto = await fetchStationHourly('73242003', `${curWinter - 1}093023`);
+  const cur = Cc.stationSeasons(auto, 1).find(s => s.winter === curWinter);
+  if (cur) seasons.push({ ...cur, source: 'auto' });
+}
+seasons.forEach(s => { s.current = s.winter === curWinter; });
+C.station = { id: '73318400', name: 'Le Corbier', elev: 1585, seasons: seasons.slice(-4) };
 
 const trim = a => a.slice(0, a.reduce((acc, v, i) => (v !== null ? i + 1 : acc), 0));
 C.current = trim(C.current);

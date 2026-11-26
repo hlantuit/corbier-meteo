@@ -113,10 +113,15 @@
           if (o && ok(o[3])) { hnf += o[3]; hnfN++; }
           if (v && ok(v.p) && ok(v.t)) { pf += v.p; sf += snowCm(v.p, v.t); nF++; }
         }
-        const hs0 = obs[startKey] && obs[startKey][2]; const hs1 = obs[endKey] && obs[endKey][2];
-        const dHS = ok(hs0) && ok(hs1) ? hs1 - hs0 : null;
-        const so = [dHS, hnfN ? hnf : null].filter(ok);
-        daily.push({ po: nO >= 22 ? po : null, pf: nF >= 22 ? pf : null, sf: nF >= 22 ? sf : null, so: so.length ? Math.max(...so) : null });
+        let snowO;
+        if (opts.snowObs) { // fresh snow observed at the next morning's report (e.g. Le Corbier, 06 UTC)
+          const v = opts.snowObs[startKey.slice(0, 8)]; snowO = ok(v) ? v : null;
+        } else {
+          const hs0 = obs[startKey] && obs[startKey][2]; const hs1 = obs[endKey] && obs[endKey][2];
+          const dHS = ok(hs0) && ok(hs1) ? hs1 - hs0 : null;
+          const so = [dHS, hnfN ? hnf : null].filter(ok); snowO = so.length ? Math.max(...so) : null;
+        }
+        daily.push({ po: nO >= 22 ? po : null, pf: nF >= 22 ? pf : null, sf: nF >= 22 ? sf : null, so: snowO });
       }
       const cont = (thr, getO, getF) => {
         let a = 0, b = 0, c = 0, dd = 0;
@@ -173,7 +178,19 @@
     return w;
   }
 
-  const api = { VERIFY_MODELS, LEADS, hourKeyFromIso, keyToDate, dateToKey, isColdSeason, parsePreviousRuns, temperatureBias, applyBias, scoreModel, ensembleMean, deriveWeights, snowCm };
+  // Morning snow reports -> { 'YYYYMMDD' (start of the 06-06 UTC day): fresh snow cm }
+  function snowObsFromReports(rows /* { 'YYYYMMDDHH': [T, RR1, NEIGETOT, HNEIGEF] } */) {
+    const out = {};
+    for (const k in rows) {
+      if (k.slice(8, 10) !== '06') continue;
+      const hn = rows[k][3]; if (!ok(hn)) continue;
+      const d = keyToDate(k); const start = new Date(d.getTime() - 864e5);
+      out[dateToKey(start).slice(0, 8)] = hn;
+    }
+    return out;
+  }
+
+  const api = { snowObsFromReports, VERIFY_MODELS, LEADS, hourKeyFromIso, keyToDate, dateToKey, isColdSeason, parsePreviousRuns, temperatureBias, applyBias, scoreModel, ensembleMean, deriveWeights, snowCm };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.VerifyCore = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -71,17 +71,26 @@ function renderNow() {
   $('now-temp').innerHTML = `${fmt(d.t, 0)}<sup>°C</sup>`;
   $('now-cond').textContent = code !== null ? (WMO[getLang()][code] || '') : '';
   $('now-where').textContent = fr() ? 'Le Corbier, 1 550 m · prévision corrigée' : 'Le Corbier, 1,550 m · bias-corrected forecast';
-  const lastObs = S.obs ? [...S.obs].reverse().find(o => o.hs !== null && o.hs !== undefined) : null;
+  // Snow on the ground: Le Corbier's own observation when there is a recent one (ski season),
+  // otherwise the automatic station at Saint-Jean-d'Arves (4 km, same elevation)
+  const recent = o => o && Date.now() - o.time < 4 * 24 * HOUR;
+  const lastC = S.obsC ? [...S.obsC].reverse().find(o => o.hs !== null && o.hs !== undefined) : null;
+  const lastJ = S.obs ? [...S.obs].reverse().find(o => o.hs !== null && o.hs !== undefined) : null;
+  const useC = recent(lastC); const lastObs = useC ? lastC : lastJ;
   $('now-hs').innerHTML = lastObs ? `${fmt(lastObs.hs, 0)}<small>cm</small>` : '–';
-  $('now-hs-hint').textContent = lastObs ? `St-Jean-d'Arves · ${ago(lastObs.time)}` : '';
+  $('now-hs-hint').textContent = !lastObs ? '' : useC
+    ? `Le Corbier · ${ago(lastObs.time)}${lastC.hn ? (fr() ? ` · +${fmt(lastC.hn, 0)} cm en 24 h` : ` · +${fmt(lastC.hn, 0)} cm in 24 h`) : ''}`
+    : (fr() ? `St-Jean-d'Arves · ${ago(lastObs.time)} (Le Corbier : relevés en saison)` : `St-Jean-d'Arves · ${ago(lastObs.time)} (Le Corbier: in season only)`);
   $('now-line').innerHTML = d.line !== null ? `${fmt(Math.round(d.line / 50) * 50)}<small>m</small>` : '–';
   $('now-line-hint').textContent = d.lineMin !== null ? `${fmt(Math.round(d.lineMin / 50) * 50)} – ${fmt(Math.round(d.lineMax / 50) * 50)} m` : '';
   $('now-wind').innerHTML = d.wind !== null ? `${fmt(d.wind, 0)}<small>km/h</small>` : '–';
   $('now-wind-hint').textContent = d.dir !== null ? `${dirName(d.dir)} · ${fr() ? 'rafales' : 'gusts'} ${fmt(d.gust, 0)} km/h` : '';
   $('now-summit').innerHTML = sum ? `${fmt(sum.t, 0)}<small>°C</small>` : '–';
   $('now-summit-hint').textContent = sum ? `${fr() ? 'neige' : 'snow'} 48 h : ${fmt(totalsBetween(2265, S.now, S.now + 48 * HOUR).cm, 0)} cm` : '';
-  const lastT = S.obs ? [...S.obs].reverse().find(o => o.t !== null && o.t !== undefined) : null;
-  $('now-foot').textContent = lastT ? `${t('now.observed')} : ${fmt(lastT.t, 1)} °C ${fr() ? 'à' : 'at'} St-Jean-d'Arves (${ago(lastT.time)}). ${fr() ? 'Modèles : ' : 'Models: '}${Object.keys(S.fc.series).length}.` : '';
+  const lastTC = S.obsC ? [...S.obsC].reverse().find(o => o.t !== null && o.t !== undefined) : null;
+  const lastTJ = S.obs ? [...S.obs].reverse().find(o => o.t !== null && o.t !== undefined) : null;
+  const lastT = recent(lastTC) && (!lastTJ || lastTC.time >= lastTJ.time - 6 * HOUR) ? { ...lastTC, where: 'Le Corbier' } : (lastTJ ? { ...lastTJ, where: "St-Jean-d'Arves" } : null);
+  $('now-foot').textContent = lastT ? `${t('now.observed')} : ${fmt(lastT.t, 1)} °C ${fr() ? 'à' : 'at'} ${lastT.where} (${ago(lastT.time)}). ${fr() ? 'Modèles : ' : 'Models: '}${Object.keys(S.fc.series).length}.` : '';
   const ev = nextSnowEvent(); const box = $('next-snow');
   box.hidden = false;
   if (ev) {
@@ -168,12 +177,15 @@ function renderModels() {
   seg.querySelectorAll('button').forEach(b => b.onclick = () => { verifMetric = b.dataset.k; renderModels(); });
   C.verificationTable('verif-table', v, verifMetric);
   const notes = {
-    snow: fr() ? 'Score ETS (0 = hasard, 1 = parfait) pour les jours avec ≥ 5 cm de neige fraîche, observés par la hausse de la hauteur de neige à la station.' : 'ETS (0 = chance, 1 = perfect) for days with ≥ 5 cm of fresh snow, observed as the rise in snow depth at the station.',
+    snow: (v.snowSource === 'corbier')
+      ? (fr() ? 'Score ETS (0 = hasard, 1 = parfait) pour les jours avec ≥ 5 cm de neige fraîche relevés au Corbier (1 585 m), saisons de ski.' : 'ETS (0 = chance, 1 = perfect) for days with ≥ 5 cm of fresh snow observed at Le Corbier (1,585 m), ski seasons.')
+      : (fr() ? 'Score ETS (0 = hasard, 1 = parfait) pour les jours avec ≥ 5 cm de neige fraîche, d’après la hausse de la hauteur de neige à Saint-Jean-d’Arves.' : 'ETS (0 = chance, 1 = perfect) for days with ≥ 5 cm of fresh snow, from rises in snow depth at Saint-Jean-d’Arves.'),
     precip: fr() ? 'Score ETS pour les jours avec ≥ 1 mm de précipitations (06–06 UTC).' : 'ETS for days with ≥ 1 mm of precipitation (06–06 UTC).',
     temp: fr() ? 'Erreur absolue moyenne horaire (°C) après correction du biais propre à chaque modèle, heure par heure.' : 'Mean absolute hourly error (°C) after removing each model’s own bias, hour by hour.',
     tempraw: fr() ? 'Erreur absolue moyenne horaire (°C) des sorties brutes, avant correction.' : 'Mean absolute hourly error (°C) of the raw output, before correction.',
   };
-  $('verif-note').textContent = notes[verifMetric] + (fr() ? ` Station Météo-France de Saint-Jean-d'Arves (1 573 m). Mise à jour : ${new Date(v.generated).toLocaleDateString('fr-FR')}.` : ` Météo-France station at Saint-Jean-d'Arves (1,573 m). Updated ${new Date(v.generated).toLocaleDateString('en-GB')}.`);
+  const src = verifMetric === 'snow' && v.snowSource === 'corbier' ? '' : (fr() ? " Station automatique de Saint-Jean-d'Arves (1 573 m, 4 km du Corbier)." : " Automatic station at Saint-Jean-d'Arves (1,573 m, 4 km from Le Corbier).");
+  $('verif-note').textContent = notes[verifMetric] + src + (fr() ? ` Mise à jour : ${new Date(v.generated).toLocaleDateString('fr-FR')}.` : ` Updated ${new Date(v.generated).toLocaleDateString('en-GB')}.`);
   renderFindings();
   renderComparator();
 }
@@ -288,6 +300,7 @@ async function renderSeason() {
 }
 
 // ---------- webcams ----------
+// Skaping's own viewer is embedded (their pages allow framing), so the panoramas stay live and interactive.
 function renderCams() {
   const cams = [
     { t: fr() ? 'Le Corbier en direct' : 'Le Corbier live', s: '1 550 m', u: 'https://www.skaping.com/le-corbier/live/' },
@@ -295,8 +308,14 @@ function renderCams() {
     { t: 'Pointe du Corbier', s: fr() ? '2 265 m · vue sur les Aiguilles d’Arves' : '2,265 m · view of the Aiguilles d’Arves', u: 'https://www.skaping.com/les-sybelles/pointe-du-corbier' },
     { t: "L'Ouillon", s: fr() ? 'Sommet des Sybelles' : 'Top of Les Sybelles', u: 'https://www.skaping.com/les-sybelles/ouillon' },
   ];
-  const ridge = (k) => `<svg class="art" viewBox="0 0 400 250" preserveAspectRatio="xMidYMid slice"><defs><linearGradient id="cg${k}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b2c4a"/><stop offset="1" stop-color="#0a1120"/></linearGradient></defs><rect width="400" height="250" fill="url(#cg${k})"/><path d="M0 ${190 - k * 6} L${60 + k * 10} ${120 - k * 8} L${120 + k * 6} ${160} L${200 - k * 4} ${80 + k * 6} L${270} ${150 - k * 4} L${330 + k * 6} ${100 + k * 5} L400 ${140} V250 H0Z" fill="#dff3ff" opacity=".14"/><path d="M0 ${220} L${90} ${170 - k * 3} L${170} ${205} L${260 + k * 8} ${150} L400 ${200} V250 H0Z" fill="#dff3ff" opacity=".22"/></svg>`;
-  $('cam-grid').innerHTML = cams.map((c, k) => `<a class="cam" href="${c.u}" target="_blank" rel="noopener">${ridge(k)}<span class="go">LIVE ↗</span><div class="meta"><div class="t">${c.t}</div><div class="s">${c.s}</div></div></a>`).join('');
+  const grid = $('cam-grid');
+  if (grid.dataset.built) { // keep the live frames on language change, only relabel
+    grid.querySelectorAll('.cam').forEach((el, k) => { el.querySelector('.t').textContent = cams[k].t; el.querySelector('.s').textContent = cams[k].s; el.querySelector('.go').textContent = fr() ? 'Ouvrir ↗' : 'Open ↗'; });
+    return;
+  }
+  grid.innerHTML = cams.map(c => `<figure class="cam"><iframe src="${c.u}" title="${c.t}" loading="lazy" allow="fullscreen" referrerpolicy="no-referrer-when-downgrade"></iframe>
+    <figcaption><span><span class="t">${c.t}</span><span class="s">${c.s}</span></span><a class="go" href="${c.u}" target="_blank" rel="noopener">${fr() ? 'Ouvrir ↗' : 'Open ↗'}</a></figcaption></figure>`).join('');
+  grid.dataset.built = '1';
 }
 
 // ---------- archive ----------
@@ -310,7 +329,10 @@ function renderArchive() {
   C.legend('leg-arch-cum', [{ color: COLORS.snow, label: t('leg.thisSeason') }, { color: '#9887ef', label: c.lastLabel }, { color: COLORS.ink2, label: t('leg.normal') }]);
   C.archiveCum('chart-arch-cum', c);
   if (c.station) {
-    $('arch-depth-sub').textContent = fr() ? 'Maximum journalier de la hauteur de neige, station Météo-France, 1 573 m.' : 'Daily maximum snow depth, Météo-France station, 1,573 m.';
+    const st = c.station; const isC = st.id === '73318400';
+    $('arch-depth-sub').textContent = isC
+      ? (fr() ? 'Relevés nivologiques Météo-France au Corbier, pendant la saison de ski.' : 'Météo-France snow observations at Le Corbier, during the ski season.') + (st.seasons.some(s => s.source === 'auto') ? (fr() ? " Saison en cours : station de Saint-Jean-d'Arves (1 573 m) en attendant les premiers relevés." : " This season: Saint-Jean-d'Arves station (1,573 m) until the first observations.") : '')
+      : (fr() ? "Maximum journalier de la hauteur de neige, station de Saint-Jean-d'Arves (1 573 m)." : "Daily maximum snow depth, Saint-Jean-d'Arves station (1,573 m).");
     C.legend('leg-arch-depth', c.station.seasons.slice().reverse().map((s, k) => ({ color: s.current ? COLORS.snow : ['#9887ef', '#00a888', '#e24d8b', '#d28e05'][c.station.seasons.length - 1 - k] || '#9887ef', label: s.label })));
     C.archiveDepth('chart-arch-depth', c.station.seasons);
   }
@@ -329,11 +351,11 @@ function renderMethods() {
   $('methods').innerHTML = fr() ? `
     <p><b>Prévision.</b> Douze modèles (AROME HD, ICON-CH1/CH2, ICON-D2, ICON-2I, ICON-EU, ARPEGE, IFS, AIFS, UKMO, GFS…) sont lus en direct via Open-Meteo pour le front de neige du Corbier. Chacun est d’abord corrigé de son biais de température propre, heure par heure et échéance par échéance, puis pondéré selon son score local : 1/erreur² pour la température, ETS² pour les précipitations.</p>
     <p><b>Neige.</b> La part de neige dans les précipitations se déduit de la limite pluie-neige du modèle quand il la fournit, sinon de son isotherme 0 °C, sinon de la température humide. La hauteur de neige fraîche utilise une densité qui dépend de la température (Hedstrom &amp; Pomeroy, 1998). On ne suppose pas de gradient de précipitations avec l’altitude.</p>
-    <p><b>Vérification.</b> Les prévisions passées (archives Open-Meteo, échéances J0 à J+7) sont comparées chaque semaine aux mesures horaires Météo-France de Saint-Jean-d’Arves (1 573 m), de novembre à avril. Les jours de neige sont repérés par la hausse de la hauteur de neige. Une seule station et deux hivers : les classements restent indicatifs.</p>
+    <p><b>Vérification.</b> Les prévisions passées (archives Open-Meteo, échéances J0 à J+7) sont comparées chaque semaine aux mesures Météo-France, de novembre à avril : neige fraîche relevée chaque matin au Corbier (1 585 m) pendant la saison de ski, température et précipitations horaires de la station automatique de Saint-Jean-d’Arves (1 573 m, 4 km). Deux hivers seulement : les classements restent indicatifs.</p>
     <p><b>Carte.</b> Le relief est le RGE ALTI de l’IGN, décodé dans le navigateur. Les couleurs de neige prévue suivent l’altitude, à partir du même calcul. Les bâtiments et remontées viennent de la BD TOPO, les pistes d’OpenStreetMap.</p>` : `
     <p><b>Forecast.</b> Twelve models (AROME HD, ICON-CH1/CH2, ICON-D2, ICON-2I, ICON-EU, ARPEGE, IFS, AIFS, UKMO, GFS…) are read live through Open-Meteo for the Le Corbier snow front. Each one first has its own temperature bias removed, hour by hour and lead time by lead time. Each is then weighted by its local score: 1/error² for temperature, ETS² for precipitation.</p>
     <p><b>Snow.</b> The snow share of precipitation comes from the model’s rain–snow line when it provides one, otherwise from its freezing level, otherwise from wet-bulb temperature. Fresh snow depth uses a temperature-dependent density (Hedstrom &amp; Pomeroy, 1998). No precipitation gradient with elevation is assumed.</p>
-    <p><b>Verification.</b> Past forecasts (Open-Meteo archive, lead days 0 to 7) are compared every week with Météo-France hourly measurements at Saint-Jean-d’Arves (1,573 m), November to April. Snow days are detected from rises in snow depth. One station and two winters: rankings are indicative.</p>
+    <p><b>Verification.</b> Past forecasts (Open-Meteo archive, lead days 0 to 7) are compared every week with Météo-France measurements, November to April: fresh snow observed every morning at Le Corbier (1,585 m) during the ski season, and hourly temperature and precipitation from the automatic station at Saint-Jean-d’Arves (1,573 m, 4 km away). Only two winters so far: rankings are indicative.</p>
     <p><b>Map.</b> The terrain is IGN’s RGE ALTI, decoded in the browser. Forecast snow colours follow elevation, using the same calculation. Buildings and lifts come from BD TOPO, pistes from OpenStreetMap.</p>`;
   $('build-info').textContent = fr() ? `Page générée dans votre navigateur le ${new Date(S.now).toLocaleString('fr-FR', { timeZone: 'Europe/Paris' })}.` : `Page generated in your browser on ${new Date(S.now).toLocaleString('en-GB', { timeZone: 'Europe/Paris' })}.`;
 }
@@ -405,6 +427,7 @@ async function main() {
   S.verif = verif; S.climate = climate; S.calib = D.makeCalibration(verif);
   renderArchive();
   D.fetchObs('73242003', 96).then(o => { S.obs = o; if (S.fc) renderNow(); }).catch(e => console.warn('obs', e));
+  D.fetchObs('73318400', 8).then(o => { S.obsC = o; if (S.fc) renderNow(); }).catch(e => console.warn('obs Le Corbier', e));
   try {
     S.fc = D.applyCalibration(await D.fetchModels(), S.calib, S.now);
     computeConsensus();

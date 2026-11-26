@@ -301,7 +301,7 @@ export async function fetchObs(stationId, hours = 96) {
   const j = await getJSON(u.toString());
   return (j.data || []).map(r => ({ ...r, k: String(r.AAAAMMJJHH) })).map(r => ({
     time: Date.UTC(+r.k.slice(0, 4), +r.k.slice(4, 6) - 1, +r.k.slice(6, 8), +r.k.slice(8, 10)),
-    t: r.T, rr: r.RR1, hs: r.NEIGETOT, ff: r.FF !== null && r.FF !== undefined ? r.FF * 3.6 : null, fxi: r.FXI !== null && r.FXI !== undefined ? r.FXI * 3.6 : null, dd: r.DD,
+    t: r.T, rr: r.RR1, hs: r.NEIGETOT, hn: r.HNEIGEF, ff: r.FF !== null && r.FF !== undefined ? r.FF * 3.6 : null, fxi: r.FXI !== null && r.FXI !== undefined ? r.FXI * 3.6 : null, dd: r.DD,
   })).reverse();
 }
 

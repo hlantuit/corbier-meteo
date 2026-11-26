@@ -1,8 +1,10 @@
 // Monthly: buildings and lifts (IGN BD TOPO, WFS) and pistes (OpenStreetMap, Overpass) -> data/*.geojson
 import { getJSON, log, writeJSON, sleep } from './common.mjs';
 
-const BBOX = { s: 45.185, w: 6.185, n: 45.285, e: 6.330 };
-const round = c => (Array.isArray(c[0]) ? c.map(round) : [+c[0].toFixed(6), +c[1].toFixed(6)]);
+// All Les Sybelles resorts: Le Corbier, La Toussuire, Les Bottières, Saint-Jean-d'Arves,
+// Saint-Sorlin-d'Arves and Saint-Colomban-des-Villards
+const BBOX = { s: 45.190, w: 6.180, n: 45.310, e: 6.330 };
+const round = c => (Array.isArray(c[0]) ? c.map(round) : [+c[0].toFixed(5), +c[1].toFixed(5)]);
 
 async function wfsAll(type, props) {
   const feats = []; let start = 0;

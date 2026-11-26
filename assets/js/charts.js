@@ -538,7 +538,7 @@ export function archiveDepth(el, seasons) {
     svg.append('rect').attr('x', m.l).attr('y', m.t).attr('width', W - m.l - m.r).attr('height', H - m.t - m.b).attr('fill', 'transparent')
       .on('pointermove', evt => {
         const [mx] = d3.pointer(evt); const i = Math.max(0, Math.min(n - 1, Math.round((+x.invert(mx) - base) / 864e5)));
-        showTip(evt, `<div class="tt-title">${fmtUtc(X(i), { day: 'numeric', month: 'long' })}</div>` + seasons.map((s, k) => row(s.label, s.values[i] === null || s.values[i] === undefined ? '–' : `${fmt(s.values[i], 0)} cm`, s.current ? COLORS.snow : pal[k % pal.length])).join(''));
+        showTip(evt, `<div class="tt-title">${fmtUtc(X(i), { day: 'numeric', month: 'long' })}</div>` + seasons.map((s, k) => row(s.label + (s.source === 'auto' ? " (St-Jean)" : ''), s.values[i] === null || s.values[i] === undefined ? '–' : `${fmt(s.values[i], 0)} cm`, s.current ? COLORS.snow : pal[k % pal.length])).join(''));
       }).on('pointerleave', hideTip);
   });
 }

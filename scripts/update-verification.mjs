@@ -11,6 +11,14 @@ const today = new Date(); const end = new Date(today.getTime() - 864e5).toISOStr
 
 const obs = await fetchStationHourly(STATION.id, '2024093023');
 log('observations:', Object.keys(obs).length, 'hours');
+// Fresh snow observed each morning at Le Corbier itself (ski season only)
+let snowObs = null;
+try {
+  const corbier = await fetchStationHourly('73318400', '2024093023');
+  snowObs = V.snowObsFromReports(corbier);
+  log('Le Corbier snow reports:', Object.keys(snowObs).length, 'days');
+  if (Object.keys(snowObs).length < 60) snowObs = null;
+} catch (e) { log('Le Corbier reports unavailable', String(e).slice(0, 120)); }
 
 const vars = []; for (const n of V.LEADS) for (const b of ['temperature_2m', 'precipitation']) vars.push(n === 0 ? b : `${b}_previous_day${n}`);
 const fc = {};
@@ -22,10 +30,10 @@ for (const m of V.VERIFY_MODELS) {
 }
 
 const ids = Object.keys(fc); const bias = {}, raw = {}, cor = {}; const corFc = {};
-for (const id of ids) { bias[id] = V.temperatureBias(obs, fc[id]); corFc[id] = V.applyBias(fc[id], bias[id]); raw[id] = V.scoreModel(obs, fc[id]); cor[id] = V.scoreModel(obs, corFc[id]); }
+for (const id of ids) { bias[id] = V.temperatureBias(obs, fc[id]); corFc[id] = V.applyBias(fc[id], bias[id]); raw[id] = V.scoreModel(obs, fc[id], { snowObs }); cor[id] = V.scoreModel(obs, corFc[id], { snowObs }); }
 const hires = ids.filter(id => /arome|icon_ch|icon_d2|icon_2i/.test(id));
-cor.mean_hires = V.scoreModel(obs, V.ensembleMean(hires.map(i => corFc[i])));
-cor.mean_all = V.scoreModel(obs, V.ensembleMean(ids.map(i => corFc[i])));
+cor.mean_hires = V.scoreModel(obs, V.ensembleMean(hires.map(i => corFc[i])), { snowObs });
+cor.mean_all = V.scoreModel(obs, V.ensembleMean(ids.map(i => corFc[i])), { snowObs });
 const weights = V.deriveWeights(Object.fromEntries(ids.map(i => [i, cor[i]])));
 
 const r = (x, d = 2) => (x === null || x === undefined ? null : +x.toFixed(d));
@@ -47,7 +55,7 @@ const biasOut = {}; for (const id in bias) { biasOut[id] = {}; for (const n in b
 const keys = Object.keys(obs).sort();
 if (ids.length < 6) { log('too few models, keeping the previous file'); process.exit(0); }
 writeJSON('data/verification.json', {
-  generated: new Date().toISOString(), period: [keys[0], keys[keys.length - 1]], station: { id: STATION.id, name: STATION.name, elev: STATION.elev }, season: 'nov-apr',
+  generated: new Date().toISOString(), period: [keys[0], keys[keys.length - 1]], station: { id: STATION.id, name: STATION.name, elev: STATION.elev }, snowSource: snowObs ? 'corbier' : 'stjean', snowStation: snowObs ? { id: '73318400', name: 'Le Corbier', elev: 1585 } : null, season: 'nov-apr',
   legend: { t: ['mae_debiased', 'mae_raw', 'bias_raw', 'n_hours'], p: ['ets_1mm', 'ets_10mm', 'ratio_fc_obs', 'mae_mm', 'n_days', 'events_10mm'], s: ['ets_5cm', 'pod', 'far', 'freq_bias', 'events', 'n_days'] },
   models, scores, bias: biasOut, weights,
 });
