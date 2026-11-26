@@ -17,6 +17,7 @@ await page.route('**/*', async route => {
   const url = route.request().url();
   const json = o => route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(o) });
   if (url.startsWith('http://localhost:8765')) return route.continue();
+  if (url.includes('historical-forecast-api.open-meteo.com')) return json(F.historical(url, now));
   if (url.includes('api.open-meteo.com/v1/forecast')) return json(F.forecast(url, now));
   if (url.includes('ensemble-api.open-meteo.com')) return json(F.ensemble(url, now));
   if (url.includes('seasonal-api.open-meteo.com')) return json(F.seasonal(url, now));
@@ -32,7 +33,10 @@ await page.waitForTimeout(+(process.env.WAIT || 9000));
 if (process.env.LANG_EN) { await page.click('button[data-lang="en"]'); await page.waitForTimeout(1500); }
 if (process.env.MODE3D) { await page.click('#btn-3d'); await page.waitForTimeout(6000); }
 if (process.env.SNOWLINE) { await page.click('input[value="line"]'); await page.waitForTimeout(2500); }
-if (process.env.SNOWNOW) { await page.click('input[value="now"]'); await page.waitForTimeout(2500); }
+if (process.env.SNOWNOW) { await page.click('input[value="depth"]'); await page.waitForTimeout(2500); }
+if (process.env.DAY) { await page.click(`.day[data-d="${process.env.DAY}"]`); await page.waitForTimeout(2000); }
+if (process.env.CUMUL) { await page.click('.seg-mini button[data-c="1"]'); await page.waitForTimeout(2000); }
+if (process.env.PROBE) console.log('PROBE', await page.evaluate(process.env.PROBE));
 await page.screenshot({ path: `${out}/hero.png` });
 if (!process.env.HERO_ONLY) {
   await page.screenshot({ path: `${out}/full.png`, fullPage: true });

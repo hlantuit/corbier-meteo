@@ -305,6 +305,48 @@ export async function fetchObs(stationId, hours = 96) {
   })).reverse();
 }
 
+// Snow depth measured every morning (06 UTC) at the stations around Le Corbier since `start`:
+// daily for the last two weeks, every other day before (at most 95 days back)
+export async function fetchSnowObs(start, now = Date.now()) {
+  const days = [];
+  for (let t = Math.max(start, now - 95 * 24 * HOUR); t <= now; t += 24 * HOUR) {
+    const age = Math.round((now - t) / (24 * HOUR));
+    if (age <= 14 || age % 2 === 0) days.push(new Date(t).toISOString().slice(0, 10).replace(/-/g, '') + '06');
+  }
+  const page = n => {
+    const u = new URL(`${API.tabular}/${MF_RESOURCES.latest}/data/`);
+    u.searchParams.set('NUM_POSTE__in', SITE.snowStations.map(s => s.id).join(','));
+    u.searchParams.set('AAAAMMJJHH__in', days.join(','));
+    u.searchParams.set('page_size', '200'); u.searchParams.set('page', String(n));
+    return getJSON(u.toString());
+  };
+  const first = await page(1);
+  const pages = Math.min(5, Math.ceil(((first.meta && first.meta.total) || 0) / 200));
+  const rest = await Promise.all([...Array(Math.max(0, pages - 1))].map((_, i) => page(i + 2).catch(() => ({ data: [] }))));
+  return [first, ...rest].flatMap(j => j.data || []).filter(r => r.NEIGETOT !== null && r.NEIGETOT !== undefined).map(r => {
+    const k = String(r.AAAAMMJJHH);
+    return { station: String(r.NUM_POSTE), time: Date.UTC(+k.slice(0, 4), +k.slice(4, 6) - 1, +k.slice(6, 8), +k.slice(8, 10)), hs: r.NEIGETOT };
+  });
+}
+
+// The models' own analyses since `start` (first hours of successive runs), averaged: drives the snowpack model
+const HIST_MODELS = ['icon_seamless', 'meteofrance_seamless', 'ecmwf_ifs025'];
+export async function fetchHistory(start, now = Date.now()) {
+  const url = `${API.historical}?` + qs({
+    latitude: SITE.lat, longitude: SITE.lon, elevation: SITE.elev,
+    start_date: new Date(start).toISOString().slice(0, 10), end_date: new Date(now).toISOString().slice(0, 10),
+    hourly: 'temperature_2m,relative_humidity_2m,precipitation', models: HIST_MODELS.join(','), timeformat: 'unixtime', timezone: 'GMT',
+  });
+  const j = await getJSON(url);
+  const time = j.hourly.time.map(s => s * 1000);
+  const mean = v => time.map((_, i) => {
+    let s = 0, n = 0; for (const m of HIST_MODELS) { const x = (j.hourly[`${v}_${m}`] || [])[i]; if (x !== null && x !== undefined) { s += x; n++; } }
+    return n ? s / n : null;
+  });
+  const keep = time.findIndex(t => t > now); const end = keep < 0 ? time.length : keep;
+  return { time: time.slice(0, end), t: mean('temperature_2m').slice(0, end), rh: mean('relative_humidity_2m').slice(0, end), p: mean('precipitation').slice(0, end), z0: SITE.elev };
+}
+
 // ---------- Baked files (written by the GitHub Action) ----------
 
 export async function fetchBaked(name) {

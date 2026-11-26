@@ -14,7 +14,7 @@ from rasterio.transform import from_bounds
 from rasterio.windows import from_bounds as window_from_bounds
 from PIL import Image
 
-AOI = (6.185, 45.185, 6.330, 45.285)  # W, S, E, N (lon/lat)
+AOI = (6.130, 45.150, 6.360, 45.320)  # W, S, E, N (lon/lat): all of Les Sybelles, Les Perrons to Saint-Colomban
 RES = 20.0  # metres in EPSG:3857 (about 14 m on the ground here)
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, 'data', 'snow')

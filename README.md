@@ -6,7 +6,9 @@ A snow and weather observatory for **Le Corbier (Les Sybelles, Savoie)**, publis
 
 ## What it does
 
-- **Now:** a relief map built from IGN's RGE ALTI, with buildings and lifts from BD TOPO, pistes from OpenStreetMap, and a 3D fly-around. You can paint it with forecast fresh snow by elevation, the rain–snow line hour by hour, or the latest Sentinel-2 snow map (20 m).
+- **Bulletin:** a short text at the top of the page on the next days, always ending with the 14-day trend. It is written by a language model on GitHub Models every 3 hours (free with the workflow's own token) from the page's numbers; if it is older than 6 hours, the browser writes one from the live forecast instead.
+- **Now:** a relief map built from IGN's RGE ALTI, with buildings and lifts from BD TOPO, pistes from OpenStreetMap, and a 3D fly-around. A skipass-style strip of 15 days paints the terrain with forecast fresh snow (per day or cumulative, with a play button), with the snow on the ground, or with the rain–snow line hour by hour. The latest clear Sentinel-2 image can be laid on top.
+- **Snow on the ground:** a snowpack model by 100 m elevation band (snowfall, degree-day melt, settling) runs from 1 October, driven by the models' analyses and then by the forecast. It is fitted to the snow depths measured every morning at seven Météo-France stations around Le Corbier (1,440–2,280 m) and re-anchored on the latest measurements.
 - **48 h:** a meteogram from twelve models (AROME HD, ICON-CH1/CH2, ICON-D2, ICON-2I, ICON-EU, ARPEGE, IFS, AIFS, UKMO, GFS). Each model is **corrected for its own local temperature bias** (by lead time and hour of day), then blended with **weights from its local score**. Also shows fresh snow by elevation, from 1,300 m to 2,430 m.
 - **15 days:** 51 ECMWF ensemble members, giving daily snow probabilities and a fan of possible totals.
 - **Models:** the verification behind the blend, lead day by lead day, cold seasons only. Snow days are scored against Météo-France's morning snow reports at Le Corbier itself (1,585 m). Temperature and precipitation are scored against the automatic station at Saint-Jean-d'Arves (1,573 m, 4 km away), because Le Corbier is not measured hourly.
@@ -44,8 +46,11 @@ The key is only used inside the Action and never reaches the web page. Without i
 | Mondays 03:41 | Model verification, biases and weights → `data/verification.json` |
 | 2nd of the month | Buildings, lifts, pistes → `data/*.geojson` |
 | 14th of the month | C3S multi-system seasonal forecast → `data/seasonal-c3s.json` |
+| Every 3 hours | AI-written bulletin (GitHub Models) → `data/bulletin.json` |
 
 ## Methods in brief
+
+- **Snowpack.** Hourly, per 100 m band: snowfall from the precipitation and wet-bulb temperature, degree-day melt (2 to 5 mm/°C/day through the season, plus rain heat), settling towards 350 kg/m³ (450 when wet). A precipitation factor (0.6–1.8) and a temperature offset (±2 °C) are fitted by grid search to the measured depths, weighted by distance (12 km scale) and age (10 days); the latest measurements then rescale the snowpack around each station's elevation (±350 m).
 
 - **Phase and amount of snow.** Each model's own snowfall height is used when available, otherwise its freezing level minus 300 m, otherwise wet-bulb temperature. Fresh-snow depth uses the temperature-dependent density of Hedstrom & Pomeroy (1998). No precipitation gradient with elevation is assumed.
 - **Verification.** Open-Meteo's *Previous Runs* archive (lead days 0–7) is compared with Météo-France hourly data from the data.gouv.fr tabular API, November to April. Scores used:

@@ -73,9 +73,35 @@ export function seasonal(url, now) {
   return { monthly: { time: months, temperature_2m_anomaly: [2, 1.8, 1.6, 2.3, 1.5, 1.4], precipitation_anomaly: [-13, 17.8, 15.1, 23.6, 16, 1.7], snowfall_anomaly: [-18.8, 0.1, 0.1, 1.8, -8, -7], snow_depth_anomaly: [-0.11, -0.17, -0.16, -0.1, -0.18, -0.31] } };
 }
 
+// Model analyses since 1 October: dry and mild until 10 days ago, then three snowy spells
+export function historical(url, now) {
+  const u = new URL(url); const models = u.searchParams.get('models').split(',');
+  const t0 = Date.parse(u.searchParams.get('start_date') + 'T00:00Z'), t1 = Date.parse(u.searchParams.get('end_date') + 'T23:00Z');
+  const time = []; for (let t = t0; t <= t1; t += HOUR) time.push(t / 1000);
+  const hourly = { time };
+  for (const m of models) {
+    hourly['temperature_2m_' + m] = time.map(s => { const age = (now - s * 1000) / 864e5; return +((age > 10 ? 6 : -1) + 3 * Math.sin((s / 3600 - 9) / 24 * 2 * Math.PI)).toFixed(1); });
+    hourly['relative_humidity_2m_' + m] = time.map(() => 88);
+    hourly['precipitation_' + m] = time.map(s => { const age = (now - s * 1000) / 864e5; return (age < 9 && age > 7) || (age < 5 && age > 4) || (age < 2 && age > 1) ? 1.2 : (age > 30 && age < 31 ? 2 : 0); });
+  }
+  return { hourly };
+}
+
 export function tabular(url, now) {
-  const rows = []; const t0 = Math.floor(now / HOUR) * HOUR - 14 * HOUR;
-  for (let i = 0; i < 96; i++) { const t = new Date(t0 - i * HOUR); const k = t.toISOString().slice(0, 13).replace(/[-T]/g, '');
+  const u = new URL(url);
+  if (u.searchParams.get('NUM_POSTE__in')) { // morning snow depths at the calibration stations
+    const elev = { '73318400': 1585, '73242003': 1573, '73280001': 1694, '73013002': 1633, '73307400': 1788, '73257005': 2277, '73257001': 1443 };
+    const rows = [];
+    for (const k of u.searchParams.get('AAAAMMJJHH__in').split(',')) for (const id of u.searchParams.get('NUM_POSTE__in').split(',')) {
+      if (id === '73318400') continue; // Le Corbier: not reporting yet
+      const t = Date.UTC(+k.slice(0, 4), +k.slice(4, 6) - 1, +k.slice(6, 8), 6); const age = (now - t) / 864e5;
+      const hs = age > 9 ? 0 : Math.max(0, Math.round((elev[id] - 1350) / 900 * 80 * Math.min(1, (9 - age) / 8)));
+      rows.push({ NUM_POSTE: id, AAAAMMJJHH: +k, NEIGETOT: hs });
+    }
+    return { data: rows.slice(0, 200), links: {}, meta: { total: rows.length } };
+  }
+  const rows = []; const t0 = Math.floor(now / HOUR) * HOUR - 14 * HOUR; const n = Math.min(200, +(u.searchParams.get('page_size') || 96));
+  for (let i = 0; i < n; i++) { const t = new Date(t0 - i * HOUR); const k = t.toISOString().slice(0, 13).replace(/[-T]/g, '');
     rows.push({ AAAAMMJJHH: k, T: +(-1 + Math.sin(i / 4)).toFixed(1), RR1: i < 30 ? 0.6 : 0, NEIGETOT: i < 20 ? 34 : (i < 40 ? 24 : 8), FF: 3.2, FXI: 8.5, DD: 250 }); }
   return { data: rows, links: {}, meta: { total: rows.length } };
 }

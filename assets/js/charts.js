@@ -67,7 +67,7 @@ const row = (key, val, sw) => `<div class="tt-row"><span class="tt-key">${sw ? `
 export function legend(el, items) {
   if (typeof el === 'string') el = document.getElementById(el);
   if (!el) return;
-  el.innerHTML = items.map(i => `<span class="k"><span class="${i.shape || 'sw'}" style="background:${i.color};${i.border ? `border:1px solid ${i.border};` : ''}"></span>${i.label}</span>`).join('');
+  el.innerHTML = items.map(i => `<span class="k"${i.id ? ` data-id="${i.id}"` : ''}><span class="${i.shape || 'sw'}" style="background:${i.color};${i.border ? `border:1px solid ${i.border};` : ''}"></span>${i.label}</span>`).join('');
 }
 
 function svgIn(el, w, h) {
@@ -90,10 +90,12 @@ function nightBands(g, x, t0, t1, y0, y1) {
 // ========== 1. 48-hour meteogram (stacked panels sharing a time axis) ==========
 export function meteogram(el, data) {
   mount(el, (node, W) => {
-    const { c1550, c2265, c1300, now } = data;
-    const t0 = now - 2 * HOUR; const t1 = now + 48 * HOUR;
+    const { c1550, c2265, c1300, now, obs } = data;
+    const O = (obs || []).filter(o => o.time >= now - 24 * HOUR && o.time <= now);
+    const t0 = now - (O.length ? 24 : 2) * HOUR; const t1 = now + 48 * HOUR;
     const sel = a => a.filter(d => d.time >= t0 && d.time <= t1 && d.n > 0);
     const A = sel(c1550), S = sel(c2265), V = sel(c1300);
+    const OT = O.filter(o => o.t !== null && o.t !== undefined);
     if (!A.length) throw new Error('no data');
     const m = { l: 46, r: 64, t: 30, b: 26 };
     const panels = [
@@ -121,7 +123,7 @@ export function meteogram(el, data) {
       const g = root.append('g');
       g.append('text').attr('class', 'panel-title').attr('x', m.l).attr('y', p.y0 - 6).text(p.title);
       if (p.key === 'temp') {
-        const vals = [...A.flatMap(d => [d.tMin, d.tMax]), ...S.map(d => d.t), ...V.map(d => d.t)].filter(v => v !== null);
+        const vals = [...A.flatMap(d => [d.tMin, d.tMax]), ...S.map(d => d.t), ...V.map(d => d.t), ...OT.map(o => o.t)].filter(v => v !== null);
         const yy = d3.scaleLinear().domain(d3.extent([...vals, 0])).nice().range([p.y1, p.y0]);
         g.append('g').attr('class', 'grid').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(yy).ticks(4).tickSize(-(W - m.l - m.r)).tickFormat(''));
         g.append('g').attr('class', 'axis').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(yy).ticks(4).tickSize(0).tickPadding(8)).call(s => s.select('.domain').remove());
@@ -130,6 +132,7 @@ export function meteogram(el, data) {
         const line = d3.line().x(px).y(d => yy(d.t)).curve(d3.curveMonotoneX).defined(d => d.t !== null);
         const series = [{ d: V, c: '#2370cd', w: 1.6, lab: '1 300 m' }, { d: S, c: '#9dc8f7', w: 1.6, lab: '2 265 m' }, { d: A, c: COLORS.consensus, w: 2.4, lab: '1 550 m' }];
         series.forEach(s => g.append('path').datum(s.d).attr('fill', 'none').attr('stroke', s.c).attr('stroke-width', s.w).attr('stroke-linejoin', 'round').attr('stroke-linecap', 'round').attr('d', line));
+        g.selectAll('circle.obs').data(OT).join('circle').attr('class', 'obs').attr('cx', d => x(paris(d.time))).attr('cy', d => yy(d.t)).attr('r', 2.6).attr('fill', COLORS.obs).attr('stroke', '#0b1220').attr('stroke-width', 1);
         // end labels with collision avoidance
         const ends = series.map(s => ({ y: yy(s.d[s.d.length - 1].t), lab: s.lab, c: s.c })).sort((a, b) => a.y - b.y);
         for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 13) ends[i].y = ends[i - 1].y + 13;
@@ -140,12 +143,20 @@ export function meteogram(el, data) {
         p.y = yy;
       }
       if (p.key === 'precip') {
-        const maxP = Math.max(1, d3.max(A, d => d.p || 0));
+        const maxP = Math.max(1, d3.max(A.filter(d => !O.length || d.time > now), d => d.p || 0), d3.max(O, o => o.rr || 0) || 0);
         const yy = d3.scaleLinear().domain([0, maxP]).nice().range([p.y1, p.y0]);
         g.append('g').attr('class', 'grid').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(yy).ticks(3).tickSize(-(W - m.l - m.r)).tickFormat(''));
         g.append('g').attr('class', 'axis').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(yy).ticks(3).tickSize(0).tickPadding(8)).call(s => s.select('.domain').remove());
         const bw = Math.max(2, Math.min(12, (x(paris(now + HOUR)) - x(paris(now))) - 2));
-        const bars = A.filter(d => d.p > 0.02);
+        // past hours: what was measured; future: the forecast split into rain and snow
+        const bars = A.filter(d => d.p > 0.02 && (!O.length || d.time > now));
+        g.selectAll('rect.obs').data(O.filter(o => o.rr > 0)).join('rect').attr('class', 'obs').attr('x', o => x(paris(o.time)) - bw).attr('width', bw).attr('y', o => yy(o.rr)).attr('height', o => Math.max(0, yy(0) - yy(o.rr))).attr('fill', COLORS.obs).attr('opacity', .85).attr('rx', 1.5);
+        if (O.length) {
+          const hs = O.filter(o => o.hs !== null && o.hs !== undefined); let lo = hs.length ? hs[0].hs : 0, rise = 0; hs.forEach(o => { lo = Math.min(lo, o.hs); rise = Math.max(rise, o.hs - lo); });
+          const rr = d3.sum(O, o => o.rr || 0);
+          g.append('text').attr('class', 'tick').attr('x', x(paris(t0)) + 6).attr('y', p.y0 + 10).attr('fill', COLORS.obs)
+            .text(getLang() === 'fr' ? `mesuré : ${fmt(rr, 0)} mm${rise >= 2 ? ` · +${fmt(rise, 0)} cm` : ''}` : `measured: ${fmt(rr, 0)} mm${rise >= 2 ? ` · +${fmt(rise, 0)} cm` : ''}`);
+        }
         g.selectAll('rect.rain').data(bars).join('rect').attr('x', d => px(d) - bw).attr('width', bw).attr('y', d => yy(d.rain)).attr('height', d => Math.max(0, yy(0) - yy(d.rain))).attr('fill', COLORS.rain).attr('rx', 1.5);
         g.selectAll('rect.snow').data(bars).join('rect').attr('x', d => px(d) - bw).attr('width', bw).attr('y', d => yy(d.p)).attr('height', d => Math.max(0, yy(d.rain) - yy(d.p) - (d.rain > 0.02 ? 1 : 0))).attr('fill', COLORS.snow).attr('rx', 1.5);
         // 48 h totals
@@ -209,14 +220,27 @@ export function meteogram(el, data) {
         const [mx] = d3.pointer(evt); const i = bis(A, +x.invert(mx)); const d = A[i]; if (!d) return;
         cross.attr('x1', px(d)).attr('x2', px(d)).attr('opacity', .5);
         const s = S[Math.min(i, S.length - 1)], v = V[Math.min(i, V.length - 1)];
+        const o = d.time <= now ? O.find(r => r.time === d.time) : null;
         showTip(evt, `<div class="tt-title">${dayLabel(paris(d.time))} · ${hourLabel(paris(d.time))}</div>` +
           row('1 550 m', `${fmt(d.t, 1)} °C`, COLORS.consensus) + row('2 265 m', `${fmt(s && s.t, 1)} °C`, '#9dc8f7') + row('1 300 m', `${fmt(v && v.t, 1)} °C`, '#2370cd') +
           row(t('leg.snow'), `${fmt(d.cm, 1)} cm`, COLORS.snow) + row(t('leg.rain'), `${fmt(d.rain, 1)} mm`, COLORS.rain) +
           row(t('now.snowline'), d.line !== null ? `${fmt(Math.round(d.line / 50) * 50)} m` : '–') +
           row(t('now.wind'), `${fmt(d.wind, 0)} / ${fmt(d.gust, 0)} km/h`) +
+          (o ? row(getLang() === 'fr' ? 'Mesuré St-Jean' : 'Measured St-Jean', `${fmt(o.t, 1)} °C · ${fmt(o.rr, 1)} mm${o.hs !== null && o.hs !== undefined ? ` · ${fmt(o.hs, 0)} cm` : ''}`, COLORS.obs) : '') +
           `<div class="tt-row" style="margin-top:4px"><span>${t('misc.lead')}</span><b>${d.n} ${getLang() === 'fr' ? 'modèles' : 'models'}</b></div>`);
       })
       .on('pointerleave', () => { cross.attr('opacity', 0); hideTip(); });
+  });
+}
+
+// Isolate one series of a multi-line chart (others dimmed); id null restores all
+export function highlight(el, id) {
+  const root = typeof el === 'string' ? document.getElementById(el) : el; if (!root) return;
+  root.querySelectorAll('path[data-id]').forEach(p => {
+    const on = p.dataset.id === id;
+    p.style.opacity = !id || on ? '' : '0.1';
+    p.style.strokeWidth = on && id !== 'consensus' ? '3px' : '';
+    if (on) p.parentNode.appendChild(p);
   });
 }
 
@@ -260,30 +284,54 @@ export function altitudeChart(el, rows) {
 }
 
 // ========== 3. Ensemble: daily fresh snow boxes ==========
-export function ensembleDaily(el, st, now) {
+export function ensembleDaily(el, st, now, past = []) {
   mount(el, (node, W) => {
     const m = { l: 40, r: 16, t: 26, b: 40 };
     const H = 240; const svg = svgIn(node, W, H);
     const days = st.days.map((d, i) => ({ d, i, q: st.dq[i] })).filter(o => o.q);
-    const x = d3.scaleBand().domain(days.map(o => o.d)).range([m.l, W - m.r]).padding(0.38);
-    const maxV = Math.max(10, d3.max(days, o => o.q.p90));
+    const obs = past.filter(p => days.length && p.d < days[0].d);
+    const x = d3.scaleBand().domain([...obs.map(o => o.d), ...days.map(o => o.d)]).range([m.l, W - m.r]).padding(0.38);
+    const maxV = Math.max(10, d3.max(days, o => o.q.p90), d3.max(obs, o => o.cm) || 0);
     const y = d3.scaleLinear().domain([0, maxV]).nice().range([H - m.b, m.t]);
     svg.append('g').attr('class', 'grid').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(4).tickSize(-(W - m.l - m.r)).tickFormat(''));
     svg.append('g').attr('class', 'axis').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(4).tickSize(0).tickPadding(8)).call(s => s.select('.domain').remove());
     svg.append('text').attr('class', 'ref-text').attr('x', m.l).attr('y', 12).text('cm');
     const bw = Math.min(24, x.bandwidth());
     const g = svg.append('g');
+    const narrowAll = x.bandwidth() < 30;
+    const dayTicks = (cx, dt, k) => {
+      if (!narrowAll) g.append('text').attr('class', 'tick').attr('x', cx).attr('y', H - m.b + 16).attr('text-anchor', 'middle').text(fmtUtc(+dt, { weekday: 'short' }));
+      if (!narrowAll || k % 2 === 0) g.append('text').attr('class', 'tick').attr('x', cx).attr('y', H - m.b + (narrowAll ? 16 : 30)).attr('text-anchor', 'middle').attr('fill', narrowAll ? COLORS.ink2 : COLORS.ink3).text(fmtUtc(+dt, { day: 'numeric' }));
+    };
+    // measured days, left of today
+    obs.forEach((o, k) => {
+      const cx = x(o.d) + x.bandwidth() / 2; const dt = new Date(o.d + 'T12:00:00Z');
+      const h = Math.max(o.cm > 0 ? 2 : 1, y(0) - y(o.cm));
+      g.append('rect').attr('x', cx - bw / 2).attr('width', bw).attr('y', y(0) - h).attr('height', h).attr('rx', 4).attr('fill', COLORS.obs).attr('opacity', o.cm > 0 ? 0.9 : 0.35);
+      if (o.cm >= 1) g.append('text').attr('class', 'tick').attr('x', cx).attr('y', y(o.cm) - 6).attr('text-anchor', 'middle').attr('fill', COLORS.obs).style('font-weight', 800).text(fmt(o.cm, 0));
+      dayTicks(cx, dt, k - obs.length);
+      g.append('rect').attr('x', x(o.d)).attr('width', x.bandwidth()).attr('y', m.t).attr('height', H - m.t - m.b).attr('fill', 'transparent')
+        .on('pointermove', evt => showTip(evt, `<div class="tt-title">${fmtUtc(+dt, { weekday: 'long', day: 'numeric', month: 'long' })}</div>` +
+          row(getLang() === 'fr' ? 'Neige fraîche mesurée' : 'Measured fresh snow', `${fmt(o.cm, 0)} cm`, COLORS.obs) +
+          (o.mm !== null && o.mm !== undefined ? row(getLang() === 'fr' ? 'Précipitations' : 'Precipitation', `${fmt(o.mm, 1)} mm`) : '') +
+          `<div class="tt-row" style="margin-top:4px"><span>${o.src === 'corbier' ? (getLang() === 'fr' ? 'Relevé du Corbier, 1 585 m' : 'Le Corbier report, 1,585 m') : (getLang() === 'fr' ? 'Hausse de la hauteur de neige, St-Jean-d’Arves' : 'Rise of snow depth, St-Jean-d’Arves')}</span></div>`))
+        .on('pointerleave', hideTip);
+    });
+    if (obs.length) {
+      const xs = x(days[0].d) - x.step() * x.paddingInner() / 2 - 1;
+      g.append('line').attr('x1', xs).attr('x2', xs).attr('y1', m.t - 2).attr('y2', H - m.b + 6).attr('stroke', COLORS.ink3).attr('stroke-dasharray', '3 3');
+      g.append('text').attr('class', 'ref-text').attr('x', xs - 6).attr('y', m.t - 8).attr('text-anchor', 'end').attr('fill', COLORS.obs).text(getLang() === 'fr' ? 'mesuré' : 'measured');
+    }
     days.forEach(o => {
       const cx = x(o.d) + x.bandwidth() / 2; const q = o.q;
       g.append('line').attr('x1', cx).attr('x2', cx).attr('y1', y(q.p10)).attr('y2', y(q.p90)).attr('stroke', COLORS.glacier || '#7fd4ff').attr('stroke-width', 1.5).attr('opacity', .8);
       g.append('rect').attr('x', cx - bw / 2).attr('width', bw).attr('y', y(q.p75)).attr('height', Math.max(1.5, y(q.p25) - y(q.p75))).attr('rx', 4).attr('fill', 'rgba(127,212,255,.35)');
       g.append('line').attr('x1', cx - bw / 2).attr('x2', cx + bw / 2).attr('y1', y(q.p50)).attr('y2', y(q.p50)).attr('stroke', COLORS.snow).attr('stroke-width', 2.5).attr('stroke-linecap', 'round');
       // probability of ≥1 cm as a small pill above
-      const pr = Math.round(q.pAny * 100); const narrow = x.bandwidth() < 30; const k = days.indexOf(o);
-      if (!narrow || k % 2 === 0) g.append('text').attr('class', 'tick').attr('x', cx).attr('y', m.t - 8).attr('text-anchor', 'middle').attr('fill', pr >= 50 ? COLORS.snow : COLORS.ink3).style('font-weight', pr >= 50 ? 800 : 600).text(`${pr}%`);
+      const pr = Math.round(q.pAny * 100); const narrow = narrowAll; const k = days.indexOf(o);
+      if ((!narrow || k % 2 === 0) && !(obs.length && k === 0 && narrow)) g.append('text').attr('class', 'tick').attr('x', cx).attr('y', m.t - 8).attr('text-anchor', 'middle').attr('fill', pr >= 50 ? COLORS.snow : COLORS.ink3).style('font-weight', pr >= 50 ? 800 : 600).text(`${pr}%`);
       const dt = new Date(o.d + 'T12:00:00Z');
-      if (!narrow) g.append('text').attr('class', 'tick').attr('x', cx).attr('y', H - m.b + 16).attr('text-anchor', 'middle').text(fmtUtc(+dt, { weekday: 'short' }));
-      if (!narrow || k % 2 === 0) g.append('text').attr('class', 'tick').attr('x', cx).attr('y', H - m.b + (narrow ? 16 : 30)).attr('text-anchor', 'middle').attr('fill', narrow ? COLORS.ink2 : COLORS.ink3).text(fmtUtc(+dt, { day: 'numeric' }));
+      dayTicks(cx, dt, k);
       g.append('rect').attr('x', x(o.d)).attr('width', x.bandwidth()).attr('y', m.t).attr('height', H - m.t - m.b).attr('fill', 'transparent')
         .on('pointermove', evt => showTip(evt, `<div class="tt-title">${fmtUtc(+dt, { weekday: 'long', day: 'numeric', month: 'long' })}</div>` +
           row(t('leg.median'), `${fmt(q.p50, 0)} cm`, COLORS.snow) + row('25 – 75 %', `${fmt(q.p25, 0)} – ${fmt(q.p75, 0)} cm`) + row('10 – 90 %', `${fmt(q.p10, 0)} – ${fmt(q.p90, 0)} cm`) +
@@ -369,9 +417,10 @@ export function comparator(el, series, consensusSeries, opts) {
     if (opts.zeroLine) svg.append('line').attr('x1', m.l).attr('x2', W - m.r).attr('y1', y(0)).attr('y2', y(0)).attr('stroke', '#5aa9ff').attr('opacity', .6);
     const line = d3.line().x(d => x(paris(d.time))).y(d => y(d.v)).defined(d => d.v !== null && d.v !== undefined).curve(d3.curveMonotoneX);
     const g = svg.append('g');
-    series.filter(s => !s.color).forEach(s => g.append('path').datum(s.values).attr('fill', 'none').attr('stroke', '#6b7d97').attr('stroke-width', 1.2).attr('opacity', .7).attr('d', line));
-    series.filter(s => s.color).forEach(s => g.append('path').datum(s.values).attr('fill', 'none').attr('stroke', s.color).attr('stroke-width', 1.8).attr('stroke-linecap', 'round').attr('d', line));
-    g.append('path').datum(consensusSeries).attr('fill', 'none').attr('stroke', COLORS.consensus).attr('stroke-width', 3).attr('stroke-linecap', 'round').attr('d', line);
+    series.filter(s => !s.color).forEach(s => g.append('path').datum(s.values).attr('data-id', 'extra').attr('fill', 'none').attr('stroke', '#6b7d97').attr('stroke-width', 1.2).attr('opacity', .7).attr('d', line));
+    series.filter(s => s.color).forEach(s => g.append('path').datum(s.values).attr('data-id', s.id).attr('fill', 'none').attr('stroke', s.color).attr('stroke-width', 1.8).attr('stroke-linecap', 'round').attr('d', line));
+    g.append('path').datum(consensusSeries).attr('data-id', 'consensus').attr('fill', 'none').attr('stroke', COLORS.consensus).attr('stroke-width', 3).attr('stroke-linecap', 'round').attr('d', line);
+    if (opts.focus) highlight(node, opts.focus);
     // end labels for cumulative views (models end at different times)
     if (opts.endLabels) {
       const ends = series.concat([{ short: t('leg.consensus').split(' ')[0], color: COLORS.consensus, values: consensusSeries }]).map(s => {

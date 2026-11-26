@@ -1,4 +1,4 @@
-// Relief map (2D and 3D) built only from free IGN services, OpenStreetMap and NASA GIBS.
+// Relief map (2D and 3D) built only from free IGN services, OpenStreetMap and Copernicus Sentinel-2.
 import { SITE, API, COLORS } from './config.js';
 import { t, fmt, getLang } from './i18n.js';
 
@@ -101,6 +101,12 @@ const BASE_STOPS = [[700, '#0c1424'], [1100, '#111c31'], [1500, '#16233b'], [190
 // Fresh snow ramp (cm): from the terrain tint to glacier blue to white
 export const SNOW_RAMP = [[0, null], [1, '#1d3a5f'], [5, '#2370cd'], [10, '#519ced'], [20, '#84b9f3'], [35, '#b6d5f8'], [60, '#dff3ff'], [100, '#ffffff']];
 
+// Snow depth ramp (cm): any snow is already a clear cold blue, deepening to white; bare ground is a warm earth
+// tone, so the snow line reads at a glance
+export const DEPTH_RAMP = [[0, null], [1, '#4f7fbf'], [10, '#6f9bd6'], [25, '#98bce9'], [50, '#c4dbf5'], [100, '#e9f3fd'], [200, '#ffffff']];
+const BARE_STOPS = [[400, '#2a2a20'], [1000, '#323026'], [1600, '#3b372b'], [2200, '#454033'], [3000, '#4f4a3e'], [3600, '#58534a']];
+export const BARE_COLOR = '#3b372b';
+
 function baseAt(z) {
   for (let i = 1; i < BASE_STOPS.length; i++) if (z <= BASE_STOPS[i][0]) {
     const [z0, c0] = BASE_STOPS[i - 1], [z1, c1] = BASE_STOPS[i];
@@ -108,15 +114,25 @@ function baseAt(z) {
   }
   return BASE_STOPS[BASE_STOPS.length - 1][1];
 }
+function bareAt(z) {
+  for (let i = 1; i < BARE_STOPS.length; i++) if (z <= BARE_STOPS[i][0]) {
+    const [z0, c0] = BARE_STOPS[i - 1], [z1, c1] = BARE_STOPS[i];
+    return window.d3.interpolateRgb(c0, c1)(Math.max(0, (z - z0) / (z1 - z0)));
+  }
+  return BARE_STOPS[BARE_STOPS.length - 1][1];
+}
 function snowColor(cm, z) {
   if (!(cm > 0.5)) return baseAt(z);
-  for (let i = 2; i < SNOW_RAMP.length; i++) if (cm <= SNOW_RAMP[i][0]) {
-    const [a, ca] = SNOW_RAMP[i - 1], [b, cb] = SNOW_RAMP[i];
-    const c0 = ca || baseAt(z);
-    return window.d3.interpolateRgb(c0, cb)((cm - a) / (b - a));
-  }
-  return '#ffffff';
+  if (cm <= SNOW_RAMP[1][0]) return window.d3.interpolateRgb(baseAt(z), SNOW_RAMP[1][1])(cm / SNOW_RAMP[1][0]);
+  return rampColor(cm, SNOW_RAMP.slice(1));
 }
+function rampColor(v, ramp) { // ramp: [[value, colour], ...] ascending
+  if (v <= ramp[0][0]) return ramp[0][1];
+  for (let i = 1; i < ramp.length; i++) if (v <= ramp[i][0]) return window.d3.interpolateRgb(ramp[i - 1][1], ramp[i][1])((v - ramp[i - 1][0]) / (ramp[i][0] - ramp[i - 1][0]));
+  return ramp[ramp.length - 1][1];
+}
+// Snow on the ground: from 1 cm the terrain turns snow-blue to white; below, bare earth
+const depthColor = (cm, z) => (cm >= 1 ? rampColor(cm, DEPTH_RAMP.slice(1)) : bareAt(z));
 const reliefExpr = stops => ['interpolate', ['linear'], ['elevation'], ...stops.flatMap(([z, c]) => [z, c])];
 
 // ---------- map ----------
@@ -126,15 +142,18 @@ export function createMap(container, { onReady } = {}) {
   const bounds = SITE.map.bounds.flat();
   const map = new maplibregl.Map({
     container, attributionControl: false, maxPitch: 78,
-    center: SITE.map.center, zoom: SITE.map.zoom, minZoom: 11.5, maxZoom: 17.5,
+    // The map spans the full width: page scrolling must not zoom it (Ctrl + wheel, or two fingers, does)
+    cooperativeGestures: true,
+    locale: getLang() === 'fr'
+      ? { 'CooperativeGesturesHandler.WindowsHelpText': 'Ctrl + molette pour zoomer sur la carte', 'CooperativeGesturesHandler.MacHelpText': '⌘ + molette pour zoomer sur la carte', 'CooperativeGesturesHandler.MobileHelpText': 'Deux doigts pour déplacer la carte' }
+      : { 'CooperativeGesturesHandler.WindowsHelpText': 'Ctrl + scroll to zoom the map', 'CooperativeGesturesHandler.MacHelpText': '⌘ + scroll to zoom the map', 'CooperativeGesturesHandler.MobileHelpText': 'Use two fingers to move the map' },
+    center: SITE.map.center, zoom: SITE.map.zoom, minZoom: 10.8, maxZoom: 17,
     maxBounds: [[bounds[0] - 0.05, bounds[1] - 0.04], [bounds[2] + 0.05, bounds[3] + 0.04]],
     style: {
       version: 8,
       sources: {
         dem: { type: 'raster-dem', tiles: ['igndem://{z}/{x}/{y}'], tileSize: DEM_SIZE, encoding: 'mapbox', minzoom: 10, maxzoom: 14, bounds },
         lidar: { type: 'raster', tiles: [lidar], tileSize: 256, minzoom: 12, maxzoom: 17, bounds },
-        modis: { type: 'raster', tiles: [`${API.gibs}/MODIS_Terra_NDSI_Snow_Cover/default/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png`], tileSize: 256, maxzoom: 8 },
-        viirs: { type: 'raster', tiles: [`${API.gibs}/VIIRS_SNPP_NDSI_Snow_Cover/default/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png`], tileSize: 256, maxzoom: 8 },
         buildings: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
         lifts: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
         pistes: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
@@ -142,7 +161,6 @@ export function createMap(container, { onReady } = {}) {
       layers: [
         { id: 'bg', type: 'background', paint: { 'background-color': '#0b1220' } },
         { id: 'relief', type: 'color-relief', source: 'dem', paint: { 'color-relief-color': reliefExpr(BASE_STOPS), 'color-relief-opacity': 1 } },
-        { id: 'snow-sat', type: 'raster', source: 'viirs', layout: { visibility: 'none' }, paint: { 'raster-opacity': 0.75, 'raster-resampling': 'linear', 'raster-saturation': -1, 'raster-brightness-min': 0.35 } },
         { id: 'hillshade', type: 'hillshade', source: 'dem', paint: {
           'hillshade-method': 'igor', 'hillshade-exaggeration': 0.75, 'hillshade-illumination-direction': 315, 'hillshade-illumination-anchor': 'map',
           'hillshade-shadow-color': 'rgba(2,5,12,0.85)', 'hillshade-highlight-color': 'rgba(220,235,255,0.42)', 'hillshade-accent-color': 'rgba(0,0,0,0.25)' } },
@@ -176,10 +194,23 @@ export function createMap(container, { onReady } = {}) {
     // Paint the terrain by fresh snow amount as a function of elevation: amounts = [[z, cm], ...]
     setFreshSnow(amounts) {
       state.mode = 'fresh';
-      const stops = []; for (let z = 600; z <= 3400; z += 50) stops.push([z, snowColor(interp(amounts, z), z)]);
+      const stops = []; for (let z = 400; z <= 3600; z += 50) stops.push([z, snowColor(interp(amounts, z), z)]);
       map.setPaintProperty('relief', 'color-relief-color', reliefExpr(stops));
-      hideSat(map, state);
       updateLabelValues(state, z => `${fmt(interp(amounts, z), 0)} cm`);
+    },
+    // Snow on the ground (cm) as a function of elevation: amounts = [[z, cm], ...]
+    setSnowDepth(amounts) {
+      state.mode = 'depth';
+      const stops = []; for (let z = 400; z <= 3600; z += 50) stops.push([z, depthColor(interp(amounts, z), z)]);
+      // a thin glacier-blue line where the snow cover starts (1 cm)
+      let zl = null; for (let z = 400; z < 3600; z += 5) if (interp(amounts, z) < 1 && interp(amounts, z + 5) >= 1) zl = z + 5;
+      if (zl !== null) {
+        const keep = stops.filter(([z]) => z < zl - 14 || z > zl + 14);
+        keep.push([zl - 12, depthColor(0, zl)], [zl - 7, '#bfefff'], [zl + 7, '#bfefff'], [zl + 12, depthColor(Math.max(1, interp(amounts, zl + 12)), zl)]);
+        stops.length = 0; keep.sort((a, b) => a[0] - b[0]).forEach(s => stops.push(s));
+      }
+      map.setPaintProperty('relief', 'color-relief-color', reliefExpr(stops));
+      updateLabelValues(state, z => { const v = interp(amounts, z); return v < 0.5 ? (getLang() === 'fr' ? 'sans neige' : 'no snow') : `${fmt(v, 0)} cm`; });
     },
     // Snow line: terrain above the line in snow white, below in rain blue
     setSnowLine(lineZ) {
@@ -190,15 +221,11 @@ export function createMap(container, { onReady } = {}) {
         stops.push([z, c]);
       }
       map.setPaintProperty('relief', 'color-relief-color', reliefExpr(stops));
-      hideSat(map, state);
       updateLabelValues(state, z => (z >= lineZ ? (getLang() === 'fr' ? 'neige' : 'snow') : (getLang() === 'fr' ? 'pluie' : 'rain')));
     },
-    setSatelliteSnow() {
-      state.mode = 'now';
-      map.setPaintProperty('relief', 'color-relief-color', reliefExpr(BASE_STOPS));
-      if (state.s2) { ['s2-rgb', 's2-snow'].forEach(id => map.setLayoutProperty(id, 'visibility', 'visible')); }
-      else map.setLayoutProperty('snow-sat', 'visibility', 'visible');
-      updateLabelValues(state, () => null);
+    // Latest clear Sentinel-2 image (true colour), as an overlay on top of any snow layer
+    setSatellite(on) {
+      if (state.s2) map.setLayoutProperty('s2-rgb', 'visibility', on ? 'visible' : 'none');
     },
     get s2() { return state.s2; },
     setVisible(layer, on) {
@@ -208,7 +235,7 @@ export function createMap(container, { onReady } = {}) {
     set3D(on) {
       if (on) {
         map.setTerrain({ source: 'dem', exaggeration: 1.2 });
-        map.easeTo({ pitch: 62, bearing: 292, zoom: 13.25, center: [6.2560, 45.2370], duration: 2200 });
+        map.easeTo({ pitch: 62, bearing: 292, zoom: 12.6, center: [6.2560, 45.2370], duration: 2200 });
       } else {
         map.setTerrain(null);
         map.easeTo({ pitch: 0, bearing: 0, duration: 1200 });
@@ -223,10 +250,6 @@ export function createMap(container, { onReady } = {}) {
   };
 }
 
-function hideSat(map, state) {
-  map.setLayoutProperty('snow-sat', 'visibility', 'none');
-  if (state.s2) ['s2-rgb', 's2-snow'].forEach(id => map.setLayoutProperty(id, 'visibility', 'none'));
-}
 
 // Sentinel-2 snow map (20 m) and true-colour image, baked daily by the GitHub Action
 async function loadSentinel2(map, state) {
@@ -234,9 +257,7 @@ async function loadSentinel2(map, state) {
     const r = await fetch('data/snow/s2.json', { cache: 'no-cache' }); if (!r.ok) return;
     const meta = await r.json(); const v = encodeURIComponent(meta.generated || '');
     map.addSource('s2rgb', { type: 'image', url: `data/snow/s2-rgb.jpg?v=${v}`, coordinates: meta.coordinates });
-    map.addSource('s2snow', { type: 'image', url: `data/snow/s2-snow.png?v=${v}`, coordinates: meta.coordinates });
     map.addLayer({ id: 's2-rgb', type: 'raster', source: 's2rgb', layout: { visibility: 'none' }, paint: { 'raster-opacity': 0.9, 'raster-contrast': 0.1, 'raster-fade-duration': 0 } }, 'hillshade');
-    map.addLayer({ id: 's2-snow', type: 'raster', source: 's2snow', layout: { visibility: 'none' }, paint: { 'raster-opacity': 0.55, 'raster-fade-duration': 0 } }, 'pistes');
     state.s2 = meta;
   } catch (e) { /* no Sentinel-2 product yet */ }
 }
@@ -274,7 +295,7 @@ async function loadVectors(map) {
     let fc = await baked('buildings.geojson');
     if (!fc) {
       try {
-        const j = await (await fetch(wfs('BDTOPO_V3:batiment', '45.195,6.195,45.305,6.315', 'geometrie,hauteur,nombre_d_etages,usage_1'))).json();
+        const j = await (await fetch(wfs('BDTOPO_V3:batiment', '45.15,6.12,45.32,6.36', 'geometrie,hauteur,nombre_d_etages,usage_1'))).json();
         fc = { type: 'FeatureCollection', features: j.features.map(f => ({ type: 'Feature', geometry: f.geometry, properties: { h: f.properties.hauteur || (f.properties.nombre_d_etages ? f.properties.nombre_d_etages * 3 : 6), u: f.properties.usage_1 } })) };
       } catch (e) { console.warn('buildings', e); }
     }
@@ -285,7 +306,7 @@ async function loadVectors(map) {
     let fc = await baked('lifts.geojson');
     if (!fc) {
       try {
-        const j = await (await fetch(wfs('BDTOPO_V3:transport_par_cable', '45.17,6.17,45.30,6.37'))).json();
+        const j = await (await fetch(wfs('BDTOPO_V3:transport_par_cable', '45.15,6.12,45.32,6.37'))).json();
         fc = { type: 'FeatureCollection', features: j.features.map(f => ({ type: 'Feature', geometry: f.geometry, properties: { n: f.properties.toponyme, k: f.properties.nature } })) };
       } catch (e) { console.warn('lifts', e); }
     }
@@ -296,7 +317,7 @@ async function loadVectors(map) {
     let fc = await baked('pistes.geojson');
     if (!fc) {
       try {
-        const q = '[out:json][timeout:25];way["piste:type"="downhill"](45.17,6.17,45.30,6.37);out geom tags;';
+        const q = '[out:json][timeout:25];way["piste:type"="downhill"](45.15,6.12,45.32,6.37);out geom tags;';
         const j = await (await fetch('https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(q))).json();
         fc = { type: 'FeatureCollection', features: j.elements.filter(e => e.geometry).map(e => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: e.geometry.map(g => [g.lon, g.lat]) }, properties: { d: e.tags['piste:difficulty'] || '', n: e.tags.name || '' } })) };
       } catch (e) { console.warn('pistes', e); }

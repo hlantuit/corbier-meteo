@@ -3,11 +3,14 @@ import { SITE, MODELS, COLORS } from './config.js';
 import { t, fmt, getLang, setLang, applyStatic } from './i18n.js';
 import * as D from './data.js';
 import * as C from './charts.js';
-import { createMap } from './map.js';
+import { createMap, SNOW_RAMP, DEPTH_RAMP, BARE_COLOR } from './map.js';
+import * as SP from './snowpack.js';
+import * as B from './bulletin.js';
 
 const HOUR = 3600e3;
 const $ = id => document.getElementById(id);
-const S = { now: Date.now(), verif: null, climate: null, fc: null, calib: null, cons: {}, ens: null, ensStats: null, sub: null, seas: null, c3s: null, obs: null, map: null, horizon: 48, lineHour: 0, snowMode: 'fresh' };
+const S = { now: Date.now(), verif: null, climate: null, fc: null, calib: null, cons: {}, ens: null, ensStats: null, sub: null, seas: null, c3s: null, obs: null, map: null, horizon: 48, lineHour: 0, snowMode: 'fresh', day: 0, cumul: false, pack: null };
+const DAYS = 15, TREND_FROM = 7; // today + 14 days; beyond D+6 the strip shows a trend
 const fr = () => getLang() === 'fr';
 
 // ---------- language ----------
@@ -36,10 +39,32 @@ function computeConsensus() {
   const w = (id, L, k) => S.calib.weight(id, L, k);
   for (const z of [1300, 1550, 1900, 2265, 2426]) S.cons[z] = D.consensus(S.fc, z, w, S.now);
 }
+// Consensus for every elevation band of the map and the snowpack model
+function computeBands() {
+  const w = (id, L, k) => S.calib.weight(id, L, k);
+  S.bands = {}; for (const z of SP.BANDS) S.bands[z] = D.consensus(S.fc, z, w, S.now);
+  S.days = B.dayWindows(S.now, DAYS); // Paris calendar days: today (from now) + 14
+  S.fresh = {}; S.freshCum = {};
+  for (const z of SP.BANDS) {
+    const per = S.days.map(w => S.bands[z].reduce((a, x) => a + (x.n && x.time > w.from && x.time <= w.end ? (x.cm || 0) : 0), 0));
+    let acc = 0; S.fresh[z] = per; S.freshCum[z] = per.map(v => (acc += v));
+  }
+}
+const atZ = (pairs, z) => { for (let i = 1; i < pairs.length; i++) if (z <= pairs[i][0]) { const [z0, v0] = pairs[i - 1], [z1, v1] = pairs[i]; return v0 + (v1 - v0) * (z - z0) / (z1 - z0); } return pairs[pairs.length - 1][1]; };
+const freshProfile = (d, cumul) => SP.BANDS.map(z => [z, (cumul ? S.freshCum : S.fresh)[z][d]]);
+const depthProfile = d => S.pack.at(S.days[d].morning);
+// Snow on the ground: the model calibrated on the stations
+function runPack(hist, rows) {
+  try {
+    const obs = SP.snowObservations(rows || [], S.obs, S.now);
+    S.pack = SP.runSnowpack({ hist, bands: S.bands, fcTime: S.fc.time, obs, now: S.now });
+  } catch (e) { console.error('snowpack', e); S.pack = null; }
+}
+
 function totalsBetween(z, t0, t1) {
   const cons = S.cons[z] || D.consensus(S.fc, z, (id, L, k) => S.calib.weight(id, L, k), S.now);
-  let cm = 0, mm = 0; cons.forEach(d => { if (d.time > t0 && d.time <= t1 && d.n) { cm += d.cm || 0; mm += d.rain || 0; } });
-  return { cm, mm };
+  let cm = 0, mm = 0, swe = 0; cons.forEach(d => { if (d.time > t0 && d.time <= t1 && d.n) { cm += d.cm || 0; mm += d.rain || 0; swe += d.swe || 0; } });
+  return { cm, mm, swe };
 }
 function snowProfile(hours) {
   const t1 = S.now + hours * HOUR; const out = [];
@@ -60,6 +85,55 @@ function nextSnowEvent() {
   return { t0: ev[0].time, t1: ev[ev.length - 1].time, cm: ev.reduce((a, d) => a + (d.cm || 0), 0), cmHigh: at2265 };
 }
 
+// Fresh snow measured on each of the last days (Paris calendar days): Le Corbier's manual report when there is one,
+// otherwise the rises of the hourly snow depth at Saint-Jean-d'Arves (lightly smoothed; settling makes it a lower bound)
+const parisDay = ms => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms));
+function observedDaily(nDays = 7) {
+  const today = parisDay(S.now); const out = new Map();
+  const rows = (S.obs || []).filter(o => o.hs !== null && o.hs !== undefined).sort((a, b) => a.time - b.time);
+  const sm = rows.map((o, i) => ({ ...o, h: [rows[i - 1], o, rows[i + 1]].filter(Boolean).map(r => r.hs).sort((a, b) => a - b)[1] ?? o.hs }));
+  const groups = new Map(); sm.forEach(o => { const k = parisDay(o.time - HOUR); if (k >= today) return; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(o); });
+  for (const [k, g] of groups) {
+    if (g.length < 18) continue; // incomplete day
+    let lo = g[0].h, rise = 0; for (const r of g) { lo = Math.min(lo, r.h); rise = Math.max(rise, r.h - lo); }
+    out.set(k, { d: k, cm: rise >= 2 ? rise : 0, mm: g.reduce((a, r) => a + (r.rr || 0), 0), src: 'stjean' });
+  }
+  for (const o of S.obsC || []) {
+    if (o.hn === null || o.hn === undefined) continue;
+    const k = parisDay(o.time - 12 * HOUR); if (k >= today) continue;
+    out.set(k, { ...(out.get(k) || { d: k, mm: null }), cm: o.hn, src: 'corbier' });
+  }
+  return [...out.values()].sort((a, b) => (a.d < b.d ? -1 : 1)).slice(-nDays);
+}
+
+// Latest measured snow depth: Le Corbier's report when recent (ski season), otherwise Saint-Jean-d'Arves
+function latestDepth() {
+  const recent = o => o && Date.now() - o.time < 4 * 24 * HOUR;
+  const lastC = S.obsC ? [...S.obsC].reverse().find(o => o.hs !== null && o.hs !== undefined) : null;
+  const lastJ = S.obs ? [...S.obs].reverse().find(o => o.hs !== null && o.hs !== undefined) : null;
+  if (recent(lastC)) return { cm: lastC.hs, where: 'Le Corbier', time: lastC.time, hn: lastC.hn, corbier: true };
+  return lastJ ? { cm: lastJ.hs, where: "Saint-Jean-d'Arves", time: lastJ.time } : null;
+}
+
+// Bulletin at the top of the page: the AI-written text baked by the GitHub Action when it is recent,
+// otherwise the same digest phrased in the browser
+function renderBulletin() {
+  if (!S.fc || !S.days) return;
+  try {
+    S.digest = B.buildDigest({ now: S.now, cons: S.cons, days: S.days, freshAt: (z, d) => atZ(freshProfile(d, false), z), interp: atZ, ens: S.ensStats, pack: S.pack, obsHs: latestDepth() });
+  } catch (e) { console.error('bulletin', e); return; }
+  const ai = S.ai && S.ai[getLang()] && Date.now() - Date.parse(S.ai.generated) < 6 * HOUR ? S.ai : null;
+  const text = ai ? ai[getLang()] : B.writeBulletin(S.digest, getLang());
+  if (!text) return;
+  $('bulletin').hidden = false;
+  $('b-text').textContent = text; fitHero();
+  const at = new Intl.DateTimeFormat(fr() ? 'fr-FR' : 'en-GB', { weekday: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' }).format(new Date(ai ? Date.parse(ai.generated) : S.now));
+  $('b-label').textContent = fr() ? 'Bulletin' : 'Bulletin';
+  $('b-meta').innerHTML = ai
+    ? (fr() ? `Rédigé par IA (${ai.model}, via GitHub Models) à partir des données de cette page · ${at}` : `Written by AI (${ai.model}, via GitHub Models) from this page's data · ${at}`)
+    : (fr() ? `Rédigé automatiquement à partir des prévisions ci-dessous · ${at}` : `Written automatically from the forecasts below · ${at}`);
+}
+
 // ---------- renderers ----------
 function renderNow() {
   const c = S.cons[1550]; if (!c) return;
@@ -74,19 +148,20 @@ function renderNow() {
   // Snow on the ground: Le Corbier's own observation when there is a recent one (ski season),
   // otherwise the automatic station at Saint-Jean-d'Arves (4 km, same elevation)
   const recent = o => o && Date.now() - o.time < 4 * 24 * HOUR;
-  const lastC = S.obsC ? [...S.obsC].reverse().find(o => o.hs !== null && o.hs !== undefined) : null;
-  const lastJ = S.obs ? [...S.obs].reverse().find(o => o.hs !== null && o.hs !== undefined) : null;
-  const useC = recent(lastC); const lastObs = useC ? lastC : lastJ;
-  $('now-hs').innerHTML = lastObs ? `${fmt(lastObs.hs, 0)}<small>cm</small>` : '–';
-  $('now-hs-hint').textContent = !lastObs ? '' : useC
-    ? `Le Corbier · ${ago(lastObs.time)}${lastC.hn ? (fr() ? ` · +${fmt(lastC.hn, 0)} cm en 24 h` : ` · +${fmt(lastC.hn, 0)} cm in 24 h`) : ''}`
+  const lastObs = latestDepth();
+  $('now-hs').innerHTML = lastObs ? `${fmt(lastObs.cm, 0)}<small>cm</small>` : '–';
+  $('now-hs-hint').textContent = !lastObs ? '' : lastObs.corbier
+    ? `Le Corbier · ${ago(lastObs.time)}${lastObs.hn ? (fr() ? ` · +${fmt(lastObs.hn, 0)} cm en 24 h` : ` · +${fmt(lastObs.hn, 0)} cm in 24 h`) : ''}`
     : (fr() ? `St-Jean-d'Arves · ${ago(lastObs.time)} (Le Corbier : relevés en saison)` : `St-Jean-d'Arves · ${ago(lastObs.time)} (Le Corbier: in season only)`);
   $('now-line').innerHTML = d.line !== null ? `${fmt(Math.round(d.line / 50) * 50)}<small>m</small>` : '–';
   $('now-line-hint').textContent = d.lineMin !== null ? `${fmt(Math.round(d.lineMin / 50) * 50)} – ${fmt(Math.round(d.lineMax / 50) * 50)} m` : '';
   $('now-wind').innerHTML = d.wind !== null ? `${fmt(d.wind, 0)}<small>km/h</small>` : '–';
   $('now-wind-hint').textContent = d.dir !== null ? `${dirName(d.dir)} · ${fr() ? 'rafales' : 'gusts'} ${fmt(d.gust, 0)} km/h` : '';
   $('now-summit').innerHTML = sum ? `${fmt(sum.t, 0)}<small>°C</small>` : '–';
-  $('now-summit-hint').textContent = sum ? `${fr() ? 'neige' : 'snow'} 48 h : ${fmt(totalsBetween(2265, S.now, S.now + 48 * HOUR).cm, 0)} cm` : '';
+  const f48 = fmt(totalsBetween(2265, S.now, S.now + 48 * HOUR).cm, 0);
+  $('now-summit-hint').textContent = !sum ? '' : S.pack
+    ? (fr() ? `≈ ${fmt(atZ(S.pack.at(S.now), 2265), 0)} cm au sol · +${f48} cm en 48 h` : `≈ ${fmt(atZ(S.pack.at(S.now), 2265), 0)} cm on the ground · +${f48} cm in 48 h`)
+    : `${fr() ? 'neige' : 'snow'} 48 h : ${f48} cm`;
   const lastTC = S.obsC ? [...S.obsC].reverse().find(o => o.t !== null && o.t !== undefined) : null;
   const lastTJ = S.obs ? [...S.obs].reverse().find(o => o.t !== null && o.t !== undefined) : null;
   const lastT = recent(lastTC) && (!lastTJ || lastTC.time >= lastTJ.time - 6 * HOUR) ? { ...lastTC, where: 'Le Corbier' } : (lastTJ ? { ...lastTJ, where: "St-Jean-d'Arves" } : null);
@@ -105,17 +180,19 @@ function renderKpis48() {
   const lines = fut.map(d => d.line).filter(v => v !== null);
   const gust = Math.max(...fut.map(d => d.gust || 0));
   const k = (label, value, unit, hint) => `<div class="kpi"><div class="label">${label}</div><div class="value num">${value}<small>${unit}</small></div><div class="hint">${hint}</div></div>`;
+  // precipitation split by phase, in mm of water: what falls as snow and what falls as rain
+  const split = v => `<span class="ph"><i style="background:${COLORS.snow}"></i>${fr() ? 'neige' : 'snow'} ${fmt(v.swe, 0)} mm</span><span class="ph"><i style="background:${COLORS.rain}"></i>${fr() ? 'pluie' : 'rain'} ${fmt(v.mm, 0)} mm</span>`;
   $('kpis-48').innerHTML =
-    k(fr() ? 'Neige fraîche 24 h · 1 550 m' : 'Fresh snow 24 h · 1,550 m', fmt(a.cm, 0), 'cm', `${fmt(a.mm, 0)} mm ${fr() ? 'de pluie' : 'of rain'}`) +
-    k(fr() ? 'Neige fraîche 48 h · 1 550 m' : 'Fresh snow 48 h · 1,550 m', fmt(b.cm, 0), 'cm', `${fmt(b.mm, 0)} mm ${fr() ? 'de pluie' : 'of rain'}`) +
-    k(fr() ? 'Neige fraîche 48 h · 2 265 m' : 'Fresh snow 48 h · 2,265 m', fmt(c.cm, 0), 'cm', 'Pointe du Corbier') +
+    k(fr() ? 'Neige fraîche 24 h · 1 550 m' : 'Fresh snow 24 h · 1,550 m', fmt(a.cm, 0), 'cm', split(a)) +
+    k(fr() ? 'Neige fraîche 48 h · 1 550 m' : 'Fresh snow 48 h · 1,550 m', fmt(b.cm, 0), 'cm', split(b)) +
+    k(fr() ? 'Neige fraîche 48 h · 2 265 m' : 'Fresh snow 48 h · 2,265 m', fmt(c.cm, 0), 'cm', split(c)) +
     k(fr() ? 'Limite pluie-neige 48 h' : 'Rain–snow line 48 h', lines.length ? `${fmt(Math.round(Math.min(...lines) / 50) * 50)}–${fmt(Math.round(Math.max(...lines) / 50) * 50)}` : '–', 'm', `${fr() ? 'Rafales max' : 'Max gusts'} ${fmt(gust, 0)} km/h`);
 }
 
 function render48() {
   $('h48-sub').textContent = fr() ? `Consensus pondéré et corrigé, ${Object.keys(S.fc.series).length} modèles. Zone grisée : écart entre modèles. Bandes sombres : nuit.` : `Weighted, bias-corrected consensus of ${Object.keys(S.fc.series).length} models. Shaded: model spread. Dark bands: night.`;
-  C.legend('leg-48', [{ color: COLORS.consensus, label: '1 550 m' }, { color: '#9dc8f7', label: '2 265 m' }, { color: '#2370cd', label: '1 300 m' }, { color: COLORS.snow, label: t('leg.snow'), shape: 'sq' }, { color: COLORS.rain, label: t('leg.rain'), shape: 'sq' }]);
-  C.meteogram('chart-48', { c1550: S.cons[1550], c2265: S.cons[2265], c1300: S.cons[1300], now: S.now });
+  C.legend('leg-48', [{ color: COLORS.consensus, label: '1 550 m' }, { color: '#9dc8f7', label: '2 265 m' }, { color: '#2370cd', label: '1 300 m' }, { color: COLORS.snow, label: t('leg.snow'), shape: 'sq' }, { color: COLORS.rain, label: t('leg.rain'), shape: 'sq' }, { color: COLORS.obs, label: fr() ? 'Mesuré (St-Jean-d’Arves, 1 573 m)' : 'Measured (St-Jean-d’Arves, 1,573 m)', shape: 'dot' }]);
+  C.meteogram('chart-48', { c1550: S.cons[1550], c2265: S.cons[2265], c1300: S.cons[1300], now: S.now, obs: S.obs });
   renderAltitude();
 }
 
@@ -123,7 +200,7 @@ function renderAltitude() {
   const seg = $('alt-horizon');
   const hs = [24, 48, 72, 168];
   seg.innerHTML = hs.map(h => `<button type="button" data-h="${h}" aria-pressed="${h === S.horizon}">${h === 168 ? (fr() ? '7 j' : '7 d') : h + ' h'}</button>`).join('');
-  seg.querySelectorAll('button').forEach(b => b.onclick = () => { S.horizon = +b.dataset.h; renderAltitude(); syncMapHorizon(); });
+  seg.querySelectorAll('button').forEach(b => b.onclick = () => { S.horizon = +b.dataset.h; renderAltitude(); });
   const t1 = S.now + S.horizon * HOUR;
   const rows = SITE.levels.map(L => {
     const z = L.z; const per = D.snowTotals(S.fc, z, S.now, t1);
@@ -150,19 +227,22 @@ async function render15() {
       k(fr() ? '≥ 30 cm en 15 jours' : '≥ 30 cm within 15 days', fmt(p30 * 100, 0), '%', fr() ? 'part des 51 scénarios' : 'share of the 51 scenarios') +
       k(fr() ? 'Cumul médian 7 jours' : 'Median total, 7 days', fmt(q7 ? q7.p50 : null, 0), 'cm', q7 ? `${fmt(q7.p10, 0)} – ${fmt(q7.p90, 0)} cm (10–90 %)` : '') +
       k(fr() ? 'Cumul médian 15 jours' : 'Median total, 15 days', fmt(last ? last.p50 : null, 0), 'cm', last ? `${fmt(last.p10, 0)} – ${fmt(last.p90, 0)} cm (10–90 %)` : '');
-    $('d15-daily-sub').textContent = fr() ? 'Boîte : 25–75 % des scénarios · trait : 10–90 % · ligne blanche : médiane · en haut : probabilité d’au moins 1 cm.' : 'Box: 25–75 % of scenarios · whisker: 10–90 % · white line: median · on top: chance of at least 1 cm.';
+    const past = observedDaily(7);
+    $('d15-daily-sub').textContent = (fr() ? 'Boîte : 25–75 % des scénarios · trait : 10–90 % · ligne blanche : médiane · en haut : probabilité d’au moins 1 cm.' : 'Box: 25–75 % of scenarios · whisker: 10–90 % · white line: median · on top: chance of at least 1 cm.')
+      + (past.length ? (fr() ? ' À gauche, en ambre : neige fraîche mesurée les jours passés (Le Corbier en saison, sinon Saint-Jean-d’Arves).' : ' Left, in amber: fresh snow measured on past days (Le Corbier in season, otherwise Saint-Jean-d’Arves).') : '');
     $('d15-temp-sub').textContent = fr() ? 'Corrigée du biais local de l’IFS. Fines lignes : chaque scénario ; bande : 10–90 %.' : 'Corrected for IFS’s local bias. Thin lines: each scenario; band: 10–90 %.';
     $('d15-cum-sub').textContent = fr() ? 'Éventail des 51 scénarios.' : 'Fan of the 51 scenarios.';
     C.legend('leg-d15-temp', [{ color: COLORS.consensus, label: t('leg.median') }, { color: 'rgba(127,212,255,.45)', label: t('leg.p1090'), shape: 'sq' }]);
     C.legend('leg-d15-cum', [{ color: COLORS.snow, label: t('leg.median') }, { color: 'rgba(127,212,255,.5)', label: t('leg.p2575'), shape: 'sq' }, { color: 'rgba(127,212,255,.25)', label: t('leg.p1090'), shape: 'sq' }]);
-    C.ensembleDaily('chart-d15-daily', st, S.now);
+    C.ensembleDaily('chart-d15-daily', st, S.now, past);
     C.ensembleTemp('chart-d15-temp', S.ens, st);
     C.ensembleCum('chart-d15-cum', st);
+    renderBulletin();
   } catch (e) { console.error(e); ['chart-d15-daily', 'chart-d15-temp', 'chart-d15-cum'].forEach(id => $(id).innerHTML = `<div class="error">${t('misc.error')}</div>`); }
 }
 
 // ---------- models section ----------
-let verifMetric = 'snow', cmpVar = 'snow';
+let verifMetric = 'snow', cmpVar = 'snow', cmpPinned = null;
 function renderModels() {
   const v = S.verif;
   $('models-over').textContent = fr() ? 'Vérification locale' : 'Local verification';
@@ -252,8 +332,16 @@ function renderComparator() {
     if (tt <= t0) return { time: tt, v: 0 }; acc += cmpVar === 'snow' ? (d.cm || 0) : (d.p || 0); return { time: tt, v: acc }; });
   const opts = { snow: { unit: 'cm', zeroBased: true, endLabels: true, digits: 0 }, precip: { unit: 'mm', zeroBased: true, endLabels: true, digits: 0 }, temp: { unit: '°C', zeroLine: true, digits: 1 }, snowline: { unit: 'm', digits: 0 } }[cmpVar];
   $('cmp-sub').textContent = fr() ? (cmpVar === 'snow' || cmpVar === 'precip' ? 'Cumul à 1 550 m sur 10 jours, modèle par modèle. Les températures sont corrigées du biais local avant le calcul de la neige.' : 'À 1 550 m, modèle par modèle, températures corrigées du biais local.') : (cmpVar === 'snow' || cmpVar === 'precip' ? 'Running total at 1,550 m over 10 days, model by model. Temperatures are bias-corrected before snow is computed.' : 'At 1,550 m, model by model, bias-corrected temperatures.');
-  C.legend('leg-cmp', [{ color: COLORS.consensus, label: t('leg.consensus') }, ...MODELS.filter(m => S.fc.series[m.id] && m.color).map(m => ({ color: m.color, label: `${m.short} <span style="color:var(--ink-3)">${m.res}</span>` })), { color: '#6b7d97', label: fr() ? 'ICON-2I, ICON-EU' : 'ICON-2I, ICON-EU' }]);
-  C.comparator('chart-cmp', series, cons, opts);
+  C.legend('leg-cmp', [{ id: 'consensus', color: COLORS.consensus, label: t('leg.consensus') }, ...MODELS.filter(m => S.fc.series[m.id] && m.color).map(m => ({ id: m.id, color: m.color, label: `${m.short} <span style="color:var(--ink-3)">${m.res}</span>` })), { id: 'extra', color: '#6b7d97', label: 'ICON-2I, ICON-EU' }]);
+  // hover a model in the legend to isolate its curve, click to keep it
+  const legEl = $('leg-cmp'); legEl.classList.add('interactive');
+  legEl.querySelectorAll('.k[data-id]').forEach(k => {
+    k.classList.toggle('pinned', k.dataset.id === cmpPinned);
+    k.onmouseenter = () => C.highlight('chart-cmp', k.dataset.id);
+    k.onmouseleave = () => C.highlight('chart-cmp', cmpPinned);
+    k.onclick = () => { cmpPinned = cmpPinned === k.dataset.id ? null : k.dataset.id; legEl.querySelectorAll('.k').forEach(x => x.classList.toggle('pinned', x.dataset.id === cmpPinned)); C.highlight('chart-cmp', cmpPinned); };
+  });
+  C.comparator('chart-cmp', series, cons, { ...opts, focus: cmpPinned });
 }
 
 // ---------- season ----------
@@ -352,68 +440,153 @@ function renderMethods() {
     <p><b>Prévision.</b> Douze modèles (AROME HD, ICON-CH1/CH2, ICON-D2, ICON-2I, ICON-EU, ARPEGE, IFS, AIFS, UKMO, GFS…) sont lus en direct via Open-Meteo pour le front de neige du Corbier. Chacun est d’abord corrigé de son biais de température propre, heure par heure et échéance par échéance, puis pondéré selon son score local : 1/erreur² pour la température, ETS² pour les précipitations.</p>
     <p><b>Neige.</b> La part de neige dans les précipitations se déduit de la limite pluie-neige du modèle quand il la fournit, sinon de son isotherme 0 °C, sinon de la température humide. La hauteur de neige fraîche utilise une densité qui dépend de la température (Hedstrom &amp; Pomeroy, 1998). On ne suppose pas de gradient de précipitations avec l’altitude.</p>
     <p><b>Vérification.</b> Les prévisions passées (archives Open-Meteo, échéances J0 à J+7) sont comparées chaque semaine aux mesures Météo-France, de novembre à avril : neige fraîche relevée chaque matin au Corbier (1 585 m) pendant la saison de ski, température et précipitations horaires de la station automatique de Saint-Jean-d’Arves (1 573 m, 4 km). Deux hivers seulement : les classements restent indicatifs.</p>
-    <p><b>Carte.</b> Le relief est le RGE ALTI de l’IGN, décodé dans le navigateur. Les couleurs de neige prévue suivent l’altitude, à partir du même calcul. Les bâtiments et remontées viennent de la BD TOPO, les pistes d’OpenStreetMap.</p>` : `
+    <p><b>Neige au sol.</b> Un petit modèle de manteau neigeux tourne heure par heure depuis le 1<sup>er</sup> octobre, par tranches de 100 m d’altitude : chutes de neige, fonte par degrés-jours, tassement. Il est forcé par les analyses des modèles (ICON, AROME, IFS) pour le passé, puis par le consensus ci-dessus pour les 15 prochains jours. Un facteur de précipitations et un décalage de température sont ajustés pour reproduire les hauteurs de neige mesurées chaque matin par Météo-France autour du Corbier (Saint-Jean-d’Arves, Saint-Sorlin-d’Arves, Albiez, Valmeinier, Val Thorens, Saint-Martin-de-Belleville, et Le Corbier en saison), puis le manteau est recalé sur les dernières mesures. Les valeurs sont celles d’une pente moyenne : plus en adret, moins en ubac.</p>
+    <p><b>Carte.</b> Le relief est le RGE ALTI de l’IGN, décodé dans le navigateur. Les couleurs de neige suivent l’altitude, à partir des mêmes calculs. Les bâtiments et remontées viennent de la BD TOPO, les pistes d’OpenStreetMap ; l’image satellite est la dernière scène Sentinel-2 assez dégagée.</p>
+    <p><b>Bulletin.</b> Le texte en haut de page est rédigé par un modèle de langage (GitHub Models) toutes les trois heures, à partir des seuls chiffres de cette page. S’il date de plus de six heures, la page le remplace par un bulletin généré directement à partir des prévisions.</p>` : `
     <p><b>Forecast.</b> Twelve models (AROME HD, ICON-CH1/CH2, ICON-D2, ICON-2I, ICON-EU, ARPEGE, IFS, AIFS, UKMO, GFS…) are read live through Open-Meteo for the Le Corbier snow front. Each one first has its own temperature bias removed, hour by hour and lead time by lead time. Each is then weighted by its local score: 1/error² for temperature, ETS² for precipitation.</p>
     <p><b>Snow.</b> The snow share of precipitation comes from the model’s rain–snow line when it provides one, otherwise from its freezing level, otherwise from wet-bulb temperature. Fresh snow depth uses a temperature-dependent density (Hedstrom &amp; Pomeroy, 1998). No precipitation gradient with elevation is assumed.</p>
     <p><b>Verification.</b> Past forecasts (Open-Meteo archive, lead days 0 to 7) are compared every week with Météo-France measurements, November to April: fresh snow observed every morning at Le Corbier (1,585 m) during the ski season, and hourly temperature and precipitation from the automatic station at Saint-Jean-d’Arves (1,573 m, 4 km away). Only two winters so far: rankings are indicative.</p>
-    <p><b>Map.</b> The terrain is IGN’s RGE ALTI, decoded in the browser. Forecast snow colours follow elevation, using the same calculation. Buildings and lifts come from BD TOPO, pistes from OpenStreetMap.</p>`;
+    <p><b>Snow on the ground.</b> A small snowpack model runs hourly from 1 October in 100 m elevation bands: snowfall, degree-day melt, settling. It is driven by the models’ analyses (ICON, AROME, IFS) for the past and by the consensus above for the next 15 days. A precipitation factor and a temperature offset are fitted to reproduce the snow depths measured every morning by Météo-France around Le Corbier (Saint-Jean-d’Arves, Saint-Sorlin-d’Arves, Albiez, Valmeinier, Val Thorens, Saint-Martin-de-Belleville, and Le Corbier in season); the snowpack is then re-anchored on the latest measurements. Values are for an average slope: less on sunny slopes, more on shady ones.</p>
+    <p><b>Map.</b> The terrain is IGN’s RGE ALTI, decoded in the browser. Snow colours follow elevation, from the same calculations. Buildings and lifts come from BD TOPO, pistes from OpenStreetMap; the satellite image is the latest reasonably clear Sentinel-2 scene.</p>
+    <p><b>Bulletin.</b> The text at the top of the page is written by a language model (GitHub Models) every three hours, from this page’s numbers only. If it is more than six hours old, the page replaces it with a bulletin generated directly from the forecasts.</p>`;
   $('build-info').textContent = fr() ? `Page générée dans votre navigateur le ${new Date(S.now).toLocaleString('fr-FR', { timeZone: 'Europe/Paris' })}.` : `Page generated in your browser on ${new Date(S.now).toLocaleString('en-GB', { timeZone: 'Europe/Paris' })}.`;
 }
 
 // ---------- map wiring ----------
 function initMap() {
   try {
-    S.map = createMap('map', { onReady: () => { S.mapReady = true; syncMap(); } });
+    S.map = createMap('map', { onReady: () => { S.mapReady = true; initSatToggle(); syncMap(); } });
   } catch (e) { console.error(e); $('map-loading').textContent = t('misc.error'); return; }
   document.querySelectorAll('input[name="snowlayer"]').forEach(r => r.addEventListener('change', () => {
-    S.snowMode = r.value; document.querySelectorAll('input[name="snowlayer"]').forEach(x => x.closest('.toggle').classList.toggle('on', x.checked)); syncMap();
+    S.snowMode = r.value; S.modeChosen = true; stopPlay(); markMode(); syncMap();
   }));
   [['lyr-buildings', 'buildings'], ['lyr-lifts', 'lifts'], ['lyr-pistes', 'pistes'], ['lyr-lidar', 'lidar']].forEach(([id, l]) => $(id).addEventListener('change', e => { S.map && S.map.setVisible(l, e.target.checked); e.target.closest('.toggle').classList.toggle('on', e.target.checked); }));
+  $('lyr-sat').addEventListener('change', e => { S.map.setSatellite(e.target.checked); e.target.closest('.toggle').classList.toggle('on', e.target.checked); });
   $('btn-3d').addEventListener('click', e => { const on = e.currentTarget.getAttribute('aria-pressed') !== 'true'; e.currentTarget.setAttribute('aria-pressed', String(on)); S.map.set3D(on); if (!on) { $('btn-orbit').setAttribute('aria-pressed', 'false'); S.map.orbit(false); } });
   $('btn-orbit').addEventListener('click', e => {
     const on = e.currentTarget.getAttribute('aria-pressed') !== 'true'; e.currentTarget.setAttribute('aria-pressed', String(on));
     if (on && $('btn-3d').getAttribute('aria-pressed') !== 'true') { $('btn-3d').setAttribute('aria-pressed', 'true'); S.map.set3D(true); setTimeout(() => S.map.orbit(true), 1800); } else S.map.orbit(on);
   });
 }
-function syncMapHorizon() { if (S.snowMode === 'fresh') syncMap(); }
+function markMode() {
+  document.querySelectorAll('input[name="snowlayer"]').forEach(x => { x.checked = x.value === S.snowMode; x.closest('.toggle').classList.toggle('on', x.checked); });
+}
+function initSatToggle() {
+  const s2 = S.map && S.map.s2; $('lyr-sat-row').hidden = !s2; if (!s2) return;
+  const d = new Intl.DateTimeFormat(fr() ? 'fr-FR' : 'en-GB', { day: 'numeric', month: 'short' }).format(new Date(s2.date));
+  $('lyr-sat-label').textContent = fr() ? `Image satellite · ${d}` : `Satellite image · ${d}`;
+}
+// Opening layer: fresh snow when some is on the way, otherwise snow on the ground; first snowy day preselected
+function chooseInitialView() {
+  if (S.modeChosen || !S.fresh || !S.packTried) return;
+  S.modeChosen = true;
+  const summit = d => atZ(freshProfile(d, false), 2265);
+  const first = S.days.findIndex(w => w.d < TREND_FROM && summit(w.d) >= 3);
+  if (first < 0 && S.pack) { S.snowMode = 'depth'; S.day = 0; } else { S.snowMode = 'fresh'; S.day = Math.max(0, first); }
+  markMode();
+}
+let playTimer = null;
+function stopPlay() { if (playTimer) { clearInterval(playTimer); playTimer = null; } const b = document.querySelector('#tl-tools .play'); if (b) b.innerHTML = PLAY_ICON; }
+const PLAY_ICON = '<svg width="10" height="12" viewBox="0 0 10 12"><path d="M0 0l10 6-10 6z" fill="currentColor"/></svg>';
+const PAUSE_ICON = '<svg width="10" height="12" viewBox="0 0 10 12"><path d="M0 0h3.5v12H0zM6.5 0H10v12H6.5z" fill="currentColor"/></svg>';
+const dayName = (w, long) => new Intl.DateTimeFormat(fr() ? 'fr-FR' : 'en-GB', { weekday: long ? 'long' : 'short', day: 'numeric', ...(long ? { month: 'long' } : {}), timeZone: 'UTC' }).format(new Date(w.label));
+const wd = w => w.d === 0 ? (fr() ? 'auj.' : 'today') : new Intl.DateTimeFormat(fr() ? 'fr-FR' : 'en-GB', { weekday: 'short', timeZone: 'UTC' }).format(new Date(w.label)).replace('.', '');
+const dn = w => new Intl.DateTimeFormat(fr() ? 'fr-FR' : 'en-GB', { day: 'numeric', timeZone: 'UTC' }).format(new Date(w.label));
+const cm0 = v => (v < 0.5 ? '0' : fmt(v, 0));
+
 function syncMap() {
-  if (!S.map || !S.mapReady || !S.fc) return;
-  const ctl = $('tl-control'), lab = $('tl-label'), val = $('tl-value'), leg = $('layer-legend');
-  $('timeline').hidden = S.snowMode === 'now';
-  if (S.snowMode === 'fresh') {
-    lab.textContent = t('map.horizon');
-    const hs = [24, 48, 72, 168];
-    ctl.innerHTML = `<div class="chips">${hs.map(h => `<button class="chip" type="button" data-h="${h}" aria-pressed="${h === S.horizon}">${h === 168 ? (fr() ? '7 jours' : '7 days') : h + ' h'}</button>`).join('')}</div>`;
-    ctl.querySelectorAll('.chip').forEach(b => b.onclick = () => { S.horizon = +b.dataset.h; syncMap(); renderAltitude(); });
-    const prof = snowProfile(S.horizon); S.map.setFreshSnow(prof);
-    const at = z => { const p = prof.find(x => x[0] >= z); return p ? p[1] : 0; };
-    val.textContent = `${fmt(at(1550), 0)} cm · 1 550 m`;
-    leg.innerHTML = `<div class="swatch-ramp" style="background:linear-gradient(90deg,#1d3a5f,#2370cd,#519ced,#84b9f3,#b6d5f8,#dff3ff,#fff)"></div><div class="ramp-labels"><span>1</span><span>10</span><span>20</span><span>35</span><span>60+ cm</span></div>`;
-  } else if (S.snowMode === 'line') {
-    lab.textContent = t('map.hour');
-    const max = 72; ctl.innerHTML = `<input type="range" min="0" max="${max}" step="1" value="${S.lineHour}" aria-label="${t('map.hour')}">`;
+  if (!S.map || !S.mapReady || !S.fc || !S.fresh) return;
+  chooseInitialView();
+  const ctl = $('tl-control'), lab = $('tl-label'), val = $('tl-value'), tools = $('tl-tools'), leg = $('layer-legend');
+  if (S.snowMode === 'depth' && !S.pack) { S.snowMode = 'fresh'; markMode(); }
+  if (S.snowMode === 'line') {
+    stopPlay(); tools.innerHTML = '';
+    lab.innerHTML = fr() ? 'Limite pluie-neige' : 'Rain–snow line';
+    const max = 120; ctl.innerHTML = `<input type="range" min="0" max="${max}" step="1" value="${S.lineHour}" aria-label="${t('map.hour')}" style="margin:8px 0 4px">`;
     const input = ctl.querySelector('input');
     const apply = () => {
       S.lineHour = +input.value; input.style.setProperty('--p', `${(S.lineHour / max) * 100}%`);
       const target = S.now + S.lineHour * HOUR; const c = S.cons[1550]; const d = c.reduce((a, x) => (Math.abs(x.time - target) < Math.abs(a.time - target) ? x : a), c[0]);
       S.map.setSnowLine(d.line);
-      val.textContent = `${new Intl.DateTimeFormat(fr() ? 'fr-FR' : 'en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' }).format(new Date(d.time))} · ${d.line !== null ? fmt(Math.round(d.line / 50) * 50) + ' m' : '–'}`;
+      val.innerHTML = `${new Intl.DateTimeFormat(fr() ? 'fr-FR' : 'en-GB', { weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' }).format(new Date(d.time))} · <b>${d.line !== null ? fmt(Math.round(d.line / 50) * 50) + ' m' : '–'}</b>`;
     };
-    input.addEventListener('input', apply); apply();
+    input.addEventListener('input', apply); apply(); fitHero();
     leg.innerHTML = `<div class="legend" style="margin:4px 8px"><span class="k"><span class="sq" style="background:#dff3ff"></span>${t('leg.snow')}</span><span class="k"><span class="sq" style="background:#ffd27a"></span>${fr() ? 'Limite' : 'Line'}</span><span class="k"><span class="sq" style="background:#1b4f8f"></span>${t('leg.rain')}</span></div>`;
-  } else {
-    S.map.setSatelliteSnow();
-    const s2 = S.map.s2;
-    if (s2) {
-      const d = new Intl.DateTimeFormat(fr() ? 'fr-FR' : 'en-GB', { day: 'numeric', month: 'long' }).format(new Date(s2.date));
-      leg.innerHTML = `<div class="legend" style="margin:4px 8px"><span class="k"><span class="sq" style="background:#ebf6ff"></span>${t('leg.snow')}</span><span class="k"><span class="sq" style="background:#78849a"></span>${fr() ? 'Nuages' : 'Clouds'}</span></div><div class="ramp-labels" style="margin:2px 8px 6px">Sentinel-2 · ${d} · ${fmt(s2.snow_fraction * 100, 0)} % ${fr() ? 'enneigé' : 'snow-covered'}</div>`;
-    } else leg.innerHTML = `<div class="ramp-labels" style="margin:2px 8px 6px">${t('map.snowNowNote')}</div>`;
+    return;
   }
+  const depth = S.snowMode === 'depth';
+  S.day = Math.min(S.day, DAYS - 1);
+  // header: title, day/total switch, play
+  lab.innerHTML = depth ? `${fr() ? 'Neige au sol' : 'Snow on the ground'}<small>${fr() ? 'haut 2 265 m · bas 1 550 m' : 'top 2,265 m · base 1,550 m'}</small>`
+    : `${fr() ? 'Neige fraîche' : 'Fresh snow'}<small>${fr() ? 'cm · haut 2 265 m · bas 1 550 m' : 'cm · top 2,265 m · base 1,550 m'}</small>`;
+  tools.innerHTML = (depth ? '' : `<div class="seg-mini" role="group"><button type="button" data-c="0" aria-pressed="${!S.cumul}">${fr() ? 'Par jour' : 'Daily'}</button><button type="button" data-c="1" aria-pressed="${S.cumul}">${fr() ? 'Cumul' : 'Total'}</button></div>`)
+    + `<button class="play" type="button" aria-label="${fr() ? 'Faire défiler les jours' : 'Play through the days'}">${playTimer ? PAUSE_ICON : PLAY_ICON}</button>`;
+  tools.querySelectorAll('.seg-mini button').forEach(b => b.onclick = () => { S.cumul = b.dataset.c === '1'; syncMap(); });
+  tools.querySelector('.play').onclick = () => {
+    if (playTimer) { stopPlay(); return; }
+    if (S.day >= DAYS - 1) S.day = 0;
+    playTimer = setInterval(() => { if (S.day >= DAYS - 1) { stopPlay(); return; } S.day++; paintDay(); }, 1000);
+    tools.querySelector('.play').innerHTML = PAUSE_ICON; paintDay();
+  };
+  // values for the strip
+  const vals = S.days.map(w => {
+    const prof = depth ? depthProfile(w.d) : freshProfile(w.d, S.cumul);
+    return { hi: atZ(prof, 2265), lo: atZ(prof, 1550) };
+  });
+  const scale = Math.max(depth ? 100 : S.cumul ? 30 : 20, ...vals.map(v => v.hi));
+  ctl.innerHTML = `<div class="days" role="group" aria-label="${fr() ? 'Jours' : 'Days'}">${S.days.map((w, i) => {
+    const v = vals[i]; const tr = w.d >= TREND_FROM;
+    return `<button type="button" class="day${tr ? ' trend' : ''}${w.d === TREND_FROM ? ' first-trend' : ''}" data-d="${w.d}" data-trend="${fr() ? 'tendance' : 'trend'}" aria-pressed="${w.d === S.day}" title="${dayName(w, true)}">
+      <span class="dw">${wd(w)}</span><span class="dn">${dn(w)}</span>
+      <span class="bar"><i style="--h:${Math.min(100, (v.hi / scale) * 100).toFixed(0)}%"></i></span>
+      <span class="hi${v.hi < 0.5 ? ' zero' : ''}">${cm0(v.hi)}</span><span class="lo">${cm0(v.lo)}</span></button>`;
+  }).join('')}</div>`;
+  ctl.querySelectorAll('.day').forEach(b => b.onclick = () => { stopPlay(); S.day = +b.dataset.d; paintDay(); });
+  paintDay(); fitHero();
+  // legend in the layer panel
+  const ramp = depth ? DEPTH_RAMP : SNOW_RAMP;
+  const grad = ramp.filter(r => r[1]).map(r => r[1]).join(',');
+  const ticks = depth ? ['1', '10', '25', '50', '100', '200+ cm'] : ['1', '10', '20', '35', '60+ cm'];
+  let note = '';
+  if (depth && S.pack) {
+    const f = S.pack.fit; const n = new Set(f.stations.map(s => s.station)).size;
+    note = fr() ? `Modèle calé sur ${n} stations Météo-France${f.rmse !== null ? ` · écart ±${fmt(f.rmse, 0)} cm` : ''}`
+      : `Model anchored on ${n} Météo-France stations${f.rmse !== null ? ` · error ±${fmt(f.rmse, 0)} cm` : ''}`;
+  }
+  leg.innerHTML = (depth ? `<div class="legend" style="margin:6px 8px 0"><span class="k"><span class="sq" style="background:${BARE_COLOR}"></span>${fr() ? 'Sans neige' : 'No snow'}</span><span class="k"><span class="sw" style="background:#bfefff"></span>${fr() ? 'Limite de l’enneigement' : 'Edge of the snow'}</span></div>` : '')
+    + `<div class="swatch-ramp" style="background:linear-gradient(90deg,${depth ? '' : '#16233b,'}${grad})"></div><div class="ramp-labels">${ticks.map(x => `<span>${x}</span>`).join('')}</div>${note ? `<div class="ramp-labels" style="margin:6px 8px 4px;display:block;line-height:1.35">${note}</div>` : ''}`;
+}
+// Paint the selected day on the map and in the read-out
+// Keep the map above the docked day strip, and the hero within the first screen under the bulletin
+function fitHero() {
+  const hero = $('now'), tl = $('timeline'), b = $('bulletin');
+  if (tl) hero.style.setProperty('--tlh', `${tl.offsetHeight}px`);
+  document.documentElement.style.setProperty('--bh', `${b && !b.hidden ? b.offsetHeight : 0}px`);
+}
+window.addEventListener('resize', () => requestAnimationFrame(fitHero));
+function paintDay() {
+  const depth = S.snowMode === 'depth'; const w = S.days[S.day];
+  document.querySelectorAll('#tl-control .day').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.d === S.day)));
+  const sel = document.querySelector(`#tl-control .day[data-d="${S.day}"]`); if (sel) sel.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  const prof = depth ? depthProfile(S.day) : freshProfile(S.day, S.cumul);
+  if (depth) S.map.setSnowDepth(prof); else S.map.setFreshSnow(prof);
+  const hi = fmt(atZ(prof, 2265), 0), lo = fmt(atZ(prof, 1550), 0);
+  const when = w.d === 0 ? (depth ? (fr() ? 'Maintenant' : 'Now') : (fr() ? 'Reste de la journée' : 'Rest of today')) : dayName(w, false);
+  let txt;
+  if (depth) txt = `${when}${w.d ? (fr() ? ', 9 h' : ', 9 am') : ''} · <b>${hi} cm</b> ${fr() ? 'à 2 265 m' : 'at 2,265 m'} · ${lo} cm ${fr() ? 'à 1 550 m' : 'at 1,550 m'}`;
+  else if (S.cumul) txt = `${fr() ? "D'ici" : 'Until'} ${w.d === 0 ? (fr() ? 'ce soir' : 'tonight') : dayName(w, false)} · <b>${hi} cm</b> ${fr() ? 'à 2 265 m' : 'at 2,265 m'} · ${lo} cm ${fr() ? 'à 1 550 m' : 'at 1,550 m'}`;
+  else {
+    const wet = S.cons[1550].filter(x => x.n && x.time > w.from && x.time <= w.end && (x.p || 0) > 0.2 && x.line !== null);
+    const sp = wet.reduce((a, x) => a + x.p, 0); const line = sp ? wet.reduce((a, x) => a + x.p * x.line, 0) / sp : null;
+    txt = `${when} · <b>${hi} cm</b> ${fr() ? 'à 2 265 m' : 'at 2,265 m'} · ${lo} cm ${fr() ? 'à 1 550 m' : 'at 1,550 m'}${line !== null ? ` · ${fr() ? 'limite' : 'line'} ≈ ${fmt(Math.round(line / 100) * 100)} m` : ''}`;
+  }
+  if (w.d >= TREND_FROM) txt += fr() ? ' · <span style="color:var(--ink-3)">tendance</span>' : ' · <span style="color:var(--ink-3)">trend</span>';
+  $('tl-value').innerHTML = txt;
 }
 
 // ---------- main ----------
 async function renderAll() {
-  if (S.fc) { renderNow(); renderKpis48(); render48(); renderModels(); syncMap(); }
+  if (S.fc) { renderNow(); renderKpis48(); render48(); renderModels(); initSatToggle(); syncMap(); renderBulletin(); }
   if (S.ensStats) render15();
   renderSeason(); renderCams(); renderArchive(); renderMethods();
 }
@@ -423,15 +596,25 @@ async function main() {
   ['chart-48', 'chart-alt', 'chart-d15-daily', 'chart-d15-temp', 'chart-d15-cum', 'chart-cmp', 'chart-weekly', 'chart-monthly', 'chart-arch-cum', 'chart-arch-depth', 'chart-arch-totals', 'chart-stripes'].forEach(id => C.observe($(id)));
   initMap();
   renderCams(); renderMethods();
+  D.fetchBaked('bulletin.json').then(b => { S.ai = b; renderBulletin(); });
   const [verif, climate] = await Promise.all([D.fetchBaked('verification.json'), D.fetchBaked('climate.json')]);
   S.verif = verif; S.climate = climate; S.calib = D.makeCalibration(verif);
   renderArchive();
-  D.fetchObs('73242003', 96).then(o => { S.obs = o; if (S.fc) renderNow(); }).catch(e => console.warn('obs', e));
+  const obsP = D.fetchObs('73242003', 168).then(o => { S.obs = o; if (S.fc) { renderNow(); render48(); } if (S.ensStats) render15(); }).catch(e => console.warn('obs', e));
   D.fetchObs('73318400', 8).then(o => { S.obsC = o; if (S.fc) renderNow(); }).catch(e => console.warn('obs Le Corbier', e));
+  // history for the snowpack model, fetched in parallel with the forecast
+  const start = SP.seasonStart(S.now);
+  const histP = D.fetchHistory(start, S.now), snowP = D.fetchSnowObs(start, S.now);
   try {
     S.fc = D.applyCalibration(await D.fetchModels(), S.calib, S.now);
-    computeConsensus();
-    renderNow(); renderKpis48(); render48(); renderModels(); syncMap();
+    computeConsensus(); computeBands();
+    renderNow(); renderKpis48(); render48(); renderModels(); renderBulletin();
+    Promise.allSettled([histP, snowP, obsP]).then(([h, s]) => {
+      if (h.status === 'fulfilled') runPack(h.value, s.status === 'fulfilled' ? s.value : []);
+      else console.warn('history', h.reason);
+      S.packTried = true; syncMap(); renderNow(); renderBulletin();
+    });
+    syncMap();
   } catch (e) {
     console.error(e);
     ['chart-48', 'chart-alt', 'chart-cmp'].forEach(id => $(id).innerHTML = `<div class="error">${t('misc.error')}</div>`);

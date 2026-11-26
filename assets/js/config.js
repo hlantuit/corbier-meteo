@@ -21,9 +21,19 @@ export const SITE = {
     { id: '73318400', name: 'Le Corbier', elev: 1585, lat: 45.243333, lon: 6.266667, kind: 'nivo' },
     { id: '73242003', name: "Saint-Jean-d'Arves", elev: 1573, lat: 45.206833, lon: 6.278833, kind: 'auto' },
   ],
+  // Météo-France stations measuring snow depth within 25 km, used to calibrate the snow-on-the-ground map
+  snowStations: [
+    { id: '73318400', name: 'Le Corbier', elev: 1585, lat: 45.243333, lon: 6.266667, manual: true },
+    { id: '73242003', name: "Saint-Jean-d'Arves", elev: 1573, lat: 45.206833, lon: 6.278833 },
+    { id: '73280001', name: "Saint-Sorlin-d'Arves", elev: 1694, lat: 45.224, lon: 6.216333 },
+    { id: '73013002', name: 'Albiez-Montrond', elev: 1633, lat: 45.210667, lon: 6.336333 },
+    { id: '73307400', name: 'Valmeinier', elev: 1788, lat: 45.176, lon: 6.493833 },
+    { id: '73257005', name: 'Val Thorens', elev: 2277, lat: 45.294, lon: 6.581 },
+    { id: '73257001', name: 'Saint-Martin-de-Belleville', elev: 1443, lat: 45.368167, lon: 6.5105 },
+  ],
   map: {
-    center: [6.2470, 45.2390],
-    zoom: 13.5,
+    center: [6.2520, 45.2440],
+    zoom: 12.7,
     bounds: [[6.02, 45.10], [6.52, 45.40]],
   },
   // Curated labels (positions from IGN BD TOPO, elevations from RGE ALTI)
@@ -36,6 +46,7 @@ export const SITE = {
     { name: 'Pointe du Corbier', lat: 45.2343, lon: 6.2434, z: 2265, kind: 'peak' },
     { name: "L'Ouillon", lat: 45.2395, lon: 6.2150, z: 2426, kind: 'peak' },
     { name: 'Le Grand Truc', lat: 45.2743, lon: 6.2564, z: 2206, kind: 'peak' },
+    { name: 'Les Perrons', lat: 45.2165, lon: 6.1912, z: 2511, kind: 'peak' },
     { name: 'Les Bottières', lat: 45.2672, lon: 6.2984, z: 1267, kind: 'hamlet' },
     { name: 'Saint-Colomban-des-Villards', lat: 45.2941, lon: 6.2268, z: 1100, kind: 'hamlet' },
   ],
@@ -72,6 +83,7 @@ export const ENSEMBLES = [
 ];
 
 export const COLORS = {
+  obs: '#ffc65c', // measurements
   ink: '#eaf1fb',
   ink2: '#93a3b8',
   ink3: '#5e6e85',
@@ -93,9 +105,9 @@ export const API = {
   ensemble: 'https://ensemble-api.open-meteo.com/v1/ensemble',
   seasonal: 'https://seasonal-api.open-meteo.com/v1/seasonal',
   archive: 'https://archive-api.open-meteo.com/v1/archive',
+  historical: 'https://historical-forecast-api.open-meteo.com/v1/forecast',
   tabular: 'https://tabular-api.data.gouv.fr/api/resources',
   ignWms: 'https://data.geopf.fr/wms-r',
   ignWmts: 'https://data.geopf.fr/wmts',
   ignVector: 'https://data.geopf.fr/tms/1.0.0/BDTOPO',
-  gibs: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best',
 };
