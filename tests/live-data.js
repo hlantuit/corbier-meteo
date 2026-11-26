@@ -1,0 +1,23 @@
+import * as D from '../assets/js/data.js';
+import { MODELS } from '../assets/js/config.js';
+window.__runData = async (verif) => {
+  const now = Date.now(); const out = {};
+  const calib = D.makeCalibration(verif);
+  const fc = D.applyCalibration(await D.fetchModels(), calib, now);
+  out.models = Object.fromEntries(Object.entries(fc.series).map(([id, s]) => [id, { last: new Date(s.lastTime).toISOString().slice(0, 13), fl: !!(s.freezing_level_height && s.freezing_level_height.some(v => v !== null)), sfh: !!(s.snowfall_height && s.snowfall_height.some(v => v !== null)) }]));
+  const w = (id, L, k) => calib.weight(id, L, k);
+  const c = D.consensus(fc, 1550, w, now); const c2 = D.consensus(fc, 2265, w, now);
+  const i = c.findIndex(d => d.time >= now - 1800e3);
+  out.now = { t: c[i].t, tRange: [c[i].tMin, c[i].tMax], line: c[i].line, wind: c[i].wind, gust: c[i].gust, n: c[i].n };
+  const sum = (arr, h) => arr.filter(d => d.time > now && d.time <= now + h * 3600e3).reduce((a, d) => a + (d.cm || 0), 0);
+  out.snow = { h24: sum(c, 24), h48: sum(c, 48), h168: sum(c, 168), h48_2265: sum(c2, 48) };
+  out.perModel48 = Object.fromEntries(Object.entries(D.snowTotals(fc, 1550, now, now + 48 * 3600e3)).map(([k, v]) => [k, Math.round(v.cm) + (v.complete ? '' : '*')]));
+  out.rawVsCorr = Object.fromEntries(Object.entries(fc.series).map(([id, s]) => [id, [s.temperature_2m[i + 1], s.tCorr[i + 1] && +s.tCorr[i + 1].toFixed(1)]]));
+  const ens = await D.fetchEnsemble('ecmwf_ifs025_ensemble', 15);
+  const st = D.ensembleStats(ens, 1550, ms => calib.tBias('ecmwf_ifs', Math.max(0, Math.floor((ms - now) / 864e5)), new Date(ms).getUTCHours()));
+  out.ens = { members: ens.members.length, p10cm7d: st.prob(7, 10), med7: st.cq[6] && st.cq[6].p50, days: st.dq.slice(0, 7).map(q => q && Math.round(q.p50)) };
+  const obs = await D.fetchObs('73242003', 6); out.obs = obs.slice(-2);
+  const sub = await D.fetchSubseasonal(); out.sub = sub.weekly.temperature_2m_anomaly.slice(0, 6);
+  const seas = await D.fetchSeasonal(); out.seas = seas.monthly.snowfall_anomaly;
+  return out;
+};
