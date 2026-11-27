@@ -54,9 +54,10 @@ export function snowLine({ sfh, fzl, t, rh, z0 }) {
   if (sfh !== null && sfh !== undefined) return sfh;
   if (fzl !== null && fzl !== undefined) return fzl - 300;
   if (t === null || t === undefined) return null;
-  // height where wet-bulb crosses ~0.75 °C, moving along the standard lapse rate
+  // height where wet-bulb crosses ~0.75 °C, moving along the standard lapse rate (LAPSE < 0: colder → lower line).
+  // Cold hours extrapolate below the valleys; the line is floored at 0 m.
   const tw = wetBulb(t, rh ?? 90);
-  return z0 + (0.75 - tw) / -LAPSE;
+  return Math.max(0, z0 + (0.75 - tw) / LAPSE);
 }
 
 // ---------- Deterministic multi-model forecast ----------
