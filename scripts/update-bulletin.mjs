@@ -1,7 +1,10 @@
 // AI-written bulletin for the top of the page, refreshed every hour by the GitHub Action.
 // It recomputes exactly what the page shows (calibrated multi-model consensus, ECMWF ensemble, snowpack model)
-// with the page's own modules, condenses it into a digest, and asks a language model on GitHub Models
-// (free with the workflow's GITHUB_TOKEN, permission `models: read`) to phrase it in French and English.
+// with the page's own modules, condenses it into a digest, and asks a language model to phrase it in French and
+// English. GitHub Models (free with GITHUB_TOKEN) was retired on 30 July 2026, so the model is now any
+// OpenAI-compatible chat endpoint given by repository secrets/variables:
+//   AI_API_KEY (secret), AI_API_URL (e.g. https://api.groq.com/openai/v1/chat/completions), AI_MODEL, AI_PROVIDER (label).
+// Without AI_API_KEY nothing is written and the page shows its own rule-based bulletin.
 // The rule-based draft from assets/js/bulletin.js is passed along so the model only improves the wording.
 import fs from 'node:fs';
 import * as D from '../assets/js/data.js';
@@ -9,7 +12,10 @@ import * as SP from '../assets/js/snowpack.js';
 import * as B from '../assets/js/bulletin.js';
 
 const HOUR = 3600e3;
-const MODELS = ['openai/gpt-4.1-mini', 'openai/gpt-4o-mini'];
+const API_URL = process.env.AI_API_URL || '';
+const API_KEY = process.env.AI_API_KEY || '';
+const MODELS = (process.env.AI_MODEL || '').split(',').map(x => x.trim()).filter(Boolean);
+const PROVIDER = process.env.AI_PROVIDER || (API_URL ? new URL(API_URL).hostname.replace(/^api\./, '') : '');
 const log = (...a) => console.log('[bulletin]', ...a);
 const now = Date.now();
 
@@ -51,9 +57,9 @@ const prompt = lang => lang === 'fr'
   : `Write the snow and weather bulletin for Le Corbier (Les Sybelles, Savoie) shown at the top of the website. 3 to 5 sentences, 80 to 120 words, in English, clear and lively, no emoji, no title, no lists or bold. Use only the numbers in the data below, rounded as in the draft; invent nothing (no wind, sunshine or skiing conditions that are not given). Order: the next 48 hours, then days 3 to 7, then the snow on the ground, and ALWAYS end with the 14-day trend and its uncertainty. "base" = Le Corbier, 1,550 m; "top" = Pointe du Corbier, 2,265 m, top of the slopes. Dates are Paris days; it is now ${today('en')}.\n\nFactual draft to rephrase: "${draft.en}"\n\nData: ${JSON.stringify(digest)}`;
 
 async function ask(model, lang) {
-  const r = await fetch('https://models.github.ai/inference/chat/completions', {
+  const r = await fetch(API_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', Authorization: `Bearer ${process.env.GITHUB_TOKEN}` },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${API_KEY}` },
     body: JSON.stringify({ model, temperature: 0.4, max_tokens: 450, messages: [
       { role: 'system', content: lang === 'fr' ? 'Tu es prévisionniste neige en montagne. Tu es précis, sobre et tu ne t’écartes jamais des données fournies.' : 'You are a mountain snow forecaster. You are precise, plain-spoken and never stray from the data you are given.' },
       { role: 'user', content: prompt(lang) },
@@ -72,11 +78,11 @@ async function ask(model, lang) {
   return text;
 }
 
-if (!process.env.GITHUB_TOKEN) { log('no GITHUB_TOKEN: nothing written'); process.exit(0); }
+if (!API_KEY || !API_URL || !MODELS.length) { log('no AI provider configured (AI_API_KEY, AI_API_URL, AI_MODEL): the page keeps its rule-based bulletin'); process.exit(0); }
 for (const model of MODELS) {
   try {
     const fr = await ask(model, 'fr'); const en = await ask(model, 'en');
-    fs.writeFileSync('data/bulletin.json', JSON.stringify({ generated: new Date().toISOString(), model: model.split('/')[1], fr, en, draft, digest }));
+    fs.writeFileSync('data/bulletin.json', JSON.stringify({ generated: new Date().toISOString(), model: model.split('/').pop(), provider: PROVIDER, fr, en, draft, digest }));
     log('written with', model); log(fr);
     process.exit(0);
   } catch (e) { log(model, 'failed:', e.message); }

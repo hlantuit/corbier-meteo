@@ -92,8 +92,10 @@ data/                   baked JSON/GeoJSON/images written by the workflow
   EN words LOW…VERY HIGH), open pistes by colour dot (#4CAF50/#1565C0/#C62828/#212121), lifts, nordic km.
   `scripts/update-resort.mjs` → `data/resort.json` hourly; keeps the old file if parsing fails. Shown in the now-card
   (hidden when > 48 h old). Not yet used in the snowpack fit.
-- **GitHub Models** (`models.github.ai/inference/chat/completions`, model `openai/gpt-4.1-mini`, fallback
-  `openai/gpt-4o-mini`) with the workflow's `GITHUB_TOKEN` and `permissions: models: read` — free.
+- **AI bulletin**: GitHub Models was RETIRED on 30 Jul 2026 (models.github.ai now answers every path with
+  200 text/plain "OK"). `scripts/update-bulletin.mjs` now calls any OpenAI-compatible chat endpoint from secret
+  `AI_API_KEY` + variables `AI_API_URL`, `AI_MODEL` (comma list = fallbacks), `AI_PROVIDER` (label shown on the page).
+  Not configured → step logs and exits 0, page shows its rule-based bulletin.
 
 ## Stations
 
@@ -162,7 +164,7 @@ Schedule (UTC):
 hourly :07 bulletin · 05:17 & 17:17 climate (ERA5 archive + station seasons) · 11:43 & 15:43 Sentinel-2 ·
 Mon & Thu 03:41 verification (~6 min) · 2nd of month vectors · 14th of month C3S seasonal.
 `workflow_dispatch` input `what` = all | climate | snow | verification | vectors | seasonal | bulletin.
-Permissions: `contents: write`, `models: read`. Steps are `continue-on-error`; final step commits `data/` and
+Permissions: `contents: write`. Steps are `continue-on-error`; final step commits `data/` and
 pushes with `git pull --rebase`.
 
 ## Testing

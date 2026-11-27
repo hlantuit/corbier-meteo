@@ -7,7 +7,7 @@ name: Update data
 # GitHub from pausing the schedule after 60 days without activity.
 on:
   schedule:
-    - cron: '7 * * * *'       # hourly: resort report + AI-written bulletin (GitHub Models)
+    - cron: '7 * * * *'       # hourly: resort report + AI-written bulletin
     - cron: '17 5,17 * * *'   # twice a day: archive + Météo-France snow depth
     - cron: '43 11,15 * * *'  # twice a day: Sentinel-2 image (after the late-morning overpass)
     - cron: '41 3 * * 1,4'    # Mondays and Thursdays: model verification
@@ -22,7 +22,6 @@ on:
 
 permissions:
   contents: write
-  models: read   # GitHub Models, for the AI-written bulletin
 
 concurrency:
   group: update-data
@@ -93,11 +92,14 @@ jobs:
         continue-on-error: true
         run: node scripts/update-resort.mjs
 
-      - name: AI-written bulletin (GitHub Models)
+      - name: AI-written bulletin (OpenAI-compatible API, configured by secrets; skipped when none)
         if: steps.plan.outputs.what == 'all' || steps.plan.outputs.what == 'bulletin'
         continue-on-error: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          AI_API_URL: ${{ vars.AI_API_URL }}
+          AI_MODEL: ${{ vars.AI_MODEL }}
+          AI_PROVIDER: ${{ vars.AI_PROVIDER }}
         run: node scripts/update-bulletin.mjs
 
       - name: Commit
