@@ -1,9 +1,11 @@
 // Strings in French (default) and English. Keys are used through t('key') and data-i18n attributes.
+// {site} {at} {base} {top} {topName} are replaced with the selected resort's values (config.js SITE).
+import { SITE } from './config.js';
 const STR = {
   fr: {
     'brand.sub': 'Observatoire neige & météo · Les Sybelles, Savoie',
     'nav.now': 'Maintenant', 'nav.48h': '48 h', 'nav.15d': '15 jours', 'nav.models': 'Modèles', 'nav.season': 'Saison', 'nav.cams': 'Webcams', 'nav.archive': 'Archives',
-    'now.title': 'Le Corbier, maintenant',
+    'now.title': '{site}, maintenant',
     'now.observed': 'Observé', 'now.forecast': 'Prévu',
     'now.temp': 'Température', 'now.snowDepth': 'Neige au sol', 'now.snowline': 'Limite pluie-neige', 'now.fzl': 'Isotherme 0 °C', 'now.wind': 'Vent', 'now.next': 'Prochaine neige',
     'now.station': 'Relevés Météo-France du Corbier, 1 585 m',
@@ -13,10 +15,10 @@ const STR = {
     'map.horizon': 'Cumul', 'map.hour': 'Heure', 'map.loading': 'Chargement du relief IGN…',
     'map.snowNowNote': 'MODIS/VIIRS (NASA), 500 m, dernière image sans nuages', 'map.s2Note': 'Sentinel-2, 20 m',
     'h48.title': 'Les 48 prochaines heures', 'h48.lead': 'Dix modèles corrigés de leur biais local et pondérés selon leur score ici : les modèles à maille kilométrique (AROME HD, ICON-CH, ICON-D2, ICON-2I) pèsent le plus sur ces deux jours.',
-    'h48.temp': 'Température', 'h48.precip': 'Précipitations à 1 550 m', 'h48.snowline': 'Limite pluie-neige et isotherme 0 °C', 'h48.wind': 'Vent et rafales à 1 550 m', 'h48.cloud': 'Nuages',
+    'h48.temp': 'Température', 'h48.precip': 'Précipitations à {base}', 'h48.snowline': 'Limite pluie-neige et isotherme 0 °C', 'h48.wind': 'Vent et rafales à {base}', 'h48.cloud': 'Nuages',
     'alt.title': 'Neige fraîche par altitude', 'alt.lead': 'Cumul attendu selon l’altitude, à partir de la limite pluie-neige de chaque modèle et d’une densité de neige qui dépend de la température.',
     'd15.title': 'Les 15 prochains jours', 'd15.lead': '51 scénarios ECMWF : la dispersion dit à quel point la prévision est fiable.',
-    'd15.temp': 'Température à 1 550 m — 51 membres', 'd15.daily': 'Neige fraîche par jour à 1 550 m', 'd15.cum': 'Cumul de neige fraîche à 1 550 m', 'd15.prob': 'Probabilités sur 7 jours',
+    'd15.temp': 'Température à {base} — 51 membres', 'd15.daily': 'Neige fraîche par jour à {base}', 'd15.cum': 'Cumul de neige fraîche à {base}', 'd15.prob': 'Probabilités sur 7 jours',
     'models.title': 'Quel modèle croire, et quand ?', 'models.lead': 'Chaque modèle confronté aux mesures Météo-France depuis l’hiver 2024-25, échéance par échéance : les relevés de neige fraîche du Corbier (1 585 m) pour la neige, la station automatique de Saint-Jean-d’Arves (1 573 m, à 4 km) pour la température et les précipitations, que Le Corbier ne mesure pas heure par heure.',
     'models.compare': 'Comparateur', 'models.verif': 'Score local par échéance',
     'models.var.temp': 'Température', 'models.var.precip': 'Précipitations', 'models.var.snow': 'Neige fraîche', 'models.var.snowline': 'Limite pluie-neige',
@@ -24,7 +26,7 @@ const STR = {
     'season.weekly': 'Semaines 1 à 6 — écart à la normale (ECMWF EC46)', 'season.monthly': 'Mois à venir — écart à la normale (ECMWF SEAS5)',
     'cams.title': 'Webcams', 'cams.lead': 'La dernière image de chaque caméra, mise à jour toutes les 10 minutes ; « Direct » ouvre le flux en direct (Skaping).',
     'archive.title': 'Archives et réanalyse', 'archive.lead': 'La saison en cours replacée dans 75 hivers de réanalyse ERA5-Land et dans les mesures Météo-France.',
-    'archive.cum': 'Cumul de neige depuis le 1ᵉʳ novembre à 1 550 m', 'archive.depth': 'Hauteur de neige mesurée au Corbier (1 585 m)', 'archive.stripes': 'Hivers à 1 550 m, 1950 → aujourd’hui', 'archive.totals': 'Neige tombée par hiver (nov.–avr.)',
+    'archive.cum': 'Cumul de neige depuis le 1ᵉʳ novembre à {base}', 'archive.depth': 'Hauteur de neige mesurée au Corbier (1 585 m)', 'archive.stripes': 'Hivers à {base}, 1950 → aujourd’hui', 'archive.totals': 'Neige tombée par hiver (nov.–avr.)',
     'unit.cm': 'cm', 'unit.mm': 'mm', 'unit.m': 'm', 'unit.kmh': 'km/h',
     'leg.consensus': 'Consensus pondéré', 'leg.range': 'Écart entre modèles', 'leg.snow': 'Neige', 'leg.rain': 'Pluie', 'leg.mixed': 'Pluie et neige', 'leg.members': 'Membres', 'leg.median': 'Médiane', 'leg.p1090': '10 – 90 %', 'leg.p2575': '25 – 75 %',
     'leg.thisSeason': 'Saison en cours', 'leg.normal': 'Médiane 1991–2020', 'leg.obs': 'Mesuré',
@@ -35,7 +37,7 @@ const STR = {
   en: {
     'brand.sub': 'Snow & weather observatory · Les Sybelles, Savoie',
     'nav.now': 'Now', 'nav.48h': '48 h', 'nav.15d': '15 days', 'nav.models': 'Models', 'nav.season': 'Season', 'nav.cams': 'Webcams', 'nav.archive': 'Archive',
-    'now.title': 'Le Corbier, right now',
+    'now.title': '{site}, right now',
     'now.observed': 'Observed', 'now.forecast': 'Forecast',
     'now.temp': 'Temperature', 'now.snowDepth': 'Snow on the ground', 'now.snowline': 'Rain–snow line', 'now.fzl': 'Freezing level', 'now.wind': 'Wind', 'now.next': 'Next snowfall',
     'now.station': 'Météo-France observations at Le Corbier, 1,585 m',
@@ -45,10 +47,10 @@ const STR = {
     'map.horizon': 'Total', 'map.hour': 'Time', 'map.loading': 'Loading IGN terrain…',
     'map.snowNowNote': 'MODIS/VIIRS (NASA), 500 m, latest cloud-free image', 'map.s2Note': 'Sentinel-2, 20 m',
     'h48.title': 'The next 48 hours', 'h48.lead': 'Ten models, each corrected for its local bias and weighted by its score here: the kilometre-scale models (AROME HD, ICON-CH, ICON-D2, ICON-2I) carry the most weight over these two days.',
-    'h48.temp': 'Temperature', 'h48.precip': 'Precipitation at 1,550 m', 'h48.snowline': 'Rain–snow line and freezing level', 'h48.wind': 'Wind and gusts at 1,550 m', 'h48.cloud': 'Clouds',
+    'h48.temp': 'Temperature', 'h48.precip': 'Precipitation at {base}', 'h48.snowline': 'Rain–snow line and freezing level', 'h48.wind': 'Wind and gusts at {base}', 'h48.cloud': 'Clouds',
     'alt.title': 'Fresh snow by elevation', 'alt.lead': 'Expected totals by elevation, from each model’s rain–snow line and a temperature-dependent snow density.',
     'd15.title': 'The next 15 days', 'd15.lead': '51 ECMWF scenarios: the spread tells you how much to trust the forecast.',
-    'd15.temp': 'Temperature at 1,550 m — 51 members', 'd15.daily': 'Daily fresh snow at 1,550 m', 'd15.cum': 'Accumulated fresh snow at 1,550 m', 'd15.prob': 'Chances over 7 days',
+    'd15.temp': 'Temperature at {base} — 51 members', 'd15.daily': 'Daily fresh snow at {base}', 'd15.cum': 'Accumulated fresh snow at {base}', 'd15.prob': 'Chances over 7 days',
     'models.title': 'Which model to trust, and when?', 'models.lead': 'Every model checked against Météo-France measurements since winter 2024-25, lead time by lead time: fresh-snow observations at Le Corbier (1,585 m) for snow, and the automatic station at Saint-Jean-d’Arves (1,573 m, 4 km away) for temperature and precipitation, which Le Corbier does not measure hourly.',
     'models.compare': 'Comparison', 'models.verif': 'Local score by lead time',
     'models.var.temp': 'Temperature', 'models.var.precip': 'Precipitation', 'models.var.snow': 'Fresh snow', 'models.var.snowline': 'Rain–snow line',
@@ -56,7 +58,7 @@ const STR = {
     'season.weekly': 'Weeks 1 to 6 — departure from normal (ECMWF EC46)', 'season.monthly': 'Coming months — departure from normal (ECMWF SEAS5)',
     'cams.title': 'Webcams', 'cams.lead': 'The latest image from each camera, refreshed every 10 minutes; “Live” opens the live stream (Skaping).',
     'archive.title': 'Archive and reanalysis', 'archive.lead': 'This season set against 75 winters of ERA5-Land reanalysis and Météo-France measurements.',
-    'archive.cum': 'Snowfall since 1 November at 1,550 m', 'archive.depth': 'Measured snow depth at Le Corbier (1,585 m)', 'archive.stripes': 'Winters at 1,550 m, 1950 → today', 'archive.totals': 'Snowfall per winter (Nov–Apr)',
+    'archive.cum': 'Snowfall since 1 November at {base}', 'archive.depth': 'Measured snow depth at Le Corbier (1,585 m)', 'archive.stripes': 'Winters at {base}, 1950 → today', 'archive.totals': 'Snowfall per winter (Nov–Apr)',
     'unit.cm': 'cm', 'unit.mm': 'mm', 'unit.m': 'm', 'unit.kmh': 'km/h',
     'leg.consensus': 'Weighted consensus', 'leg.range': 'Model spread', 'leg.snow': 'Snow', 'leg.rain': 'Rain', 'leg.mixed': 'Rain and snow', 'leg.members': 'Members', 'leg.median': 'Median', 'leg.p1090': '10 – 90 %', 'leg.p2575': '25 – 75 %',
     'leg.thisSeason': 'This season', 'leg.normal': '1991–2020 median', 'leg.obs': 'Measured',
@@ -75,7 +77,10 @@ export function setLang(l) {
   document.documentElement.lang = l; applyStatic();
   window.dispatchEvent(new CustomEvent('langchange', { detail: l }));
 }
-export function t(key) { return (STR[lang] && STR[lang][key]) || STR.fr[key] || key; }
+// Elevation as text: '1 550 m' / '1,550 m'
+export const zm = z => `${fmt(z, 0)} m`;
+const fill = s => s.replace(/\{(site|at|base|top|topName)\}/g, (_, k) => ({ site: SITE.name, at: SITE.at[lang], base: zm(SITE.base.z), top: zm(SITE.top.z), topName: SITE.top.name })[k]);
+export function t(key) { return fill((STR[lang] && STR[lang][key]) || STR.fr[key] || key); }
 export function applyStatic(root = document) {
   root.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
 }

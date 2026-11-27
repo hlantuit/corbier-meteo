@@ -10,6 +10,8 @@ import fs from 'node:fs';
 import * as D from '../assets/js/data.js';
 import * as SP from '../assets/js/snowpack.js';
 import * as B from '../assets/js/bulletin.js';
+import { SITE } from '../assets/js/config.js'; // SITE_ID=toussuire for La Toussuire
+const OUT = `data/${SITE.dataDir}bulletin.json`;
 
 const HOUR = 3600e3;
 const API_URL = process.env.AI_API_URL || '';
@@ -26,7 +28,7 @@ const calib = D.makeCalibration(verif);
 const fc = D.applyCalibration(await D.fetchModels(), calib, now);
 const w = (id, L, k) => calib.weight(id, L, k);
 const cons = {};
-for (const z of [...SP.BANDS, 1550, 2265]) cons[z] = D.consensus(fc, z, w, now);
+for (const z of [...SP.BANDS, SITE.base.z, SITE.top.z]) cons[z] = D.consensus(fc, z, w, now);
 log('models', Object.keys(fc.series).length);
 
 const days = B.dayWindows(now, 15);
@@ -37,7 +39,7 @@ let ens = null;
 try {
   const e = await D.fetchEnsemble('ecmwf_ifs025_ensemble', 15);
   const bias = ms => calib.tBias('ecmwf_ifs', Math.max(0, Math.floor((ms - now) / (24 * HOUR))), new Date(ms).getUTCHours());
-  ens = D.ensembleStats(e, 1550, bias);
+  ens = D.ensembleStats(e, SITE.base.z, bias);
 } catch (e) { log('ensemble failed', e.message); }
 
 let pack = null, obsHs = null;
@@ -55,8 +57,8 @@ log('draft fr:', draft.fr);
 
 const today = lang => new Intl.DateTimeFormat(lang === 'fr' ? 'fr-FR' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' }).format(new Date(now));
 const prompt = lang => lang === 'fr'
-  ? `Rédige le bulletin neige et météo du Corbier (Les Sybelles, Savoie) affiché en haut du site. 3 à 5 phrases, 80 à 120 mots, en français, ton clair et vivant, sans emoji, sans titre, sans liste ni gras. Utilise uniquement les chiffres des données ci-dessous, arrondis comme dans le brouillon ; n'invente rien (ni vent, ni soleil, ni conditions de ski non indiqués). Ordre : les 48 prochaines heures, puis les jours 3 à 7, puis la neige au sol, et termine TOUJOURS par la tendance à 14 jours avec son incertitude. « base » = Le Corbier, 1 550 m ; « top » = Pointe du Corbier, 2 265 m, en haut des pistes. Les dates sont des jours de Paris ; nous sommes ${today('fr')}.\n\nBrouillon factuel à reformuler : « ${draft.fr} »\n\nDonnées : ${JSON.stringify(digest)}`
-  : `Write the snow and weather bulletin for Le Corbier (Les Sybelles, Savoie) shown at the top of the website. 3 to 5 sentences, 80 to 120 words, in English, clear and lively, no emoji, no title, no lists or bold. Use only the numbers in the data below, rounded as in the draft; invent nothing (no wind, sunshine or skiing conditions that are not given). Order: the next 48 hours, then days 3 to 7, then the snow on the ground, and ALWAYS end with the 14-day trend and its uncertainty. "base" = Le Corbier, 1,550 m; "top" = Pointe du Corbier, 2,265 m, top of the slopes. Dates are Paris days; it is now ${today('en')}.\n\nFactual draft to rephrase: "${draft.en}"\n\nData: ${JSON.stringify(digest)}`;
+  ? `Rédige le bulletin neige et météo ${SITE.of.fr} (Les Sybelles, Savoie) affiché en haut du site. 3 à 5 phrases, 80 à 120 mots, en français, ton clair et vivant, sans emoji, sans titre, sans liste ni gras. Utilise uniquement les chiffres des données ci-dessous, arrondis comme dans le brouillon ; n'invente rien (ni vent, ni soleil, ni conditions de ski non indiqués). Ordre : les 48 prochaines heures, puis les jours 3 à 7, puis la neige au sol, et termine TOUJOURS par la tendance à 14 jours avec son incertitude. « base » = Le Corbier, 1 550 m ; « top » = Pointe du Corbier, 2 265 m, en haut des pistes. Les dates sont des jours de Paris ; nous sommes ${today('fr')}.\n\nBrouillon factuel à reformuler : « ${draft.fr} »\n\nDonnées : ${JSON.stringify(digest)}`
+  : `Write the snow and weather bulletin for ${SITE.name} (Les Sybelles, Savoie) shown at the top of the website. 3 to 5 sentences, 80 to 120 words, in English, clear and lively, no emoji, no title, no lists or bold. Use only the numbers in the data below, rounded as in the draft; invent nothing (no wind, sunshine or skiing conditions that are not given). Order: the next 48 hours, then days 3 to 7, then the snow on the ground, and ALWAYS end with the 14-day trend and its uncertainty. "base" = Le Corbier, 1,550 m; "top" = Pointe du Corbier, 2,265 m, top of the slopes. Dates are Paris days; it is now ${today('en')}.\n\nFactual draft to rephrase: "${draft.en}"\n\nData: ${JSON.stringify(digest)}`;
 
 async function ask(model, lang) {
   const r = await fetch(API_URL, {
@@ -84,9 +86,9 @@ if (!API_KEY || !API_URL || !MODELS.length) { log('no AI provider configured (AI
 for (const model of MODELS) {
   try {
     const fr = await ask(model, 'fr'); const en = await ask(model, 'en');
-    fs.writeFileSync('data/bulletin.json', JSON.stringify({ generated: new Date().toISOString(), model: model.split('/').pop(), provider: PROVIDER, fr, en, draft, digest }));
+    fs.mkdirSync(OUT.replace(/[^/]+$/, ''), { recursive: true }); fs.writeFileSync(OUT, JSON.stringify({ generated: new Date().toISOString(), model: model.split('/').pop(), provider: PROVIDER, fr, en, draft, digest }));
     log('written with', model); log(fr);
     process.exit(0);
   } catch (e) { log(model, 'failed:', e.message); }
 }
-log('no model answered: data/bulletin.json left unchanged');
+log(`no model answered: ${OUT} left unchanged`);

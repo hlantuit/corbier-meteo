@@ -350,6 +350,9 @@ export async function fetchHistory(start, now = Date.now()) {
 
 // ---------- Baked files (written by the GitHub Action) ----------
 
+// Files that differ between resorts live in data/<resort>/ (SITE.dataDir); the others are shared by Les Sybelles
+const PER_SITE = new Set(['climate.json', 'bulletin.json']);
 export async function fetchBaked(name) {
-  try { const r = await fetch(`data/${name}`, { cache: 'no-cache' }); if (!r.ok) return null; return await r.json(); } catch (e) { return null; }
+  const path = PER_SITE.has(name) ? `${SITE.dataDir}${name}` : name;
+  try { const r = await fetch(`data/${path}`, { cache: 'no-cache' }); if (!r.ok) return null; return await r.json(); } catch (e) { return null; }
 }

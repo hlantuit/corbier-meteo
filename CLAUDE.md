@@ -13,6 +13,25 @@ A personal, public snow and weather dashboard for **Le Corbier (Les Sybelles, Sa
 The owner is a permafrost / Arctic scientist (AWI): fine to be technical, keep messages short, ask before big
 redesigns. He reads the site in French; FR is the default language, EN via a toggle.
 
+## Two resorts, one page (since 27 Nov 2026)
+
+`?site=toussuire` shows **La Toussuire** (https://hlantuit.github.io/corbier-meteo/?site=toussuire); no parameter =
+Le Corbier. A pill switch in the top bar links the two (keeps the #section). `config.js` `RESORTS` holds what differs:
+name, `at`/`of` phrases (« au Corbier » / « à La Toussuire »), forecast point and `base`/`top`/`low` reference
+elevations (Corbier 1,550 / Pointe du Corbier 2,265 / Villarembert 1,300; Toussuire 1,700 / Le Grand Truc 2,206 /
+Les Bottières 1,300), altitude levels, map centre, resort links, webcams, `dataDir`. Everything else is shared:
+Météo-France stations (La Toussuire has none of its own; Le Corbier 2 km away and Saint-Jean-d'Arves are used and named
+as such), verification and bias corrections (computed at Le Corbier), snowpack calibration, map vectors, Sentinel-2,
+seasonal. Code never hard-codes 1550/2265: use `SITE.base.z`/`SITE.top.z` (app.js `BZ`/`TZ`/`LZ`), `zm(z)` for
+"1 550 m", and `{site}`/`{at}`/`{base}`/`{top}` placeholders in i18n strings. Node scripts pick the resort with
+`SITE_ID=toussuire`. Per-resort baked files: `data/<dataDir>climate.json` (ERA5 at the resort's base elevation) and
+`bulletin.json` (`data.js` `PER_SITE`); `resort.json` is shared: its avalanche level is the Maurienne BERA, its run
+count is Le Corbier's and is shown on Le Corbier's page only (la-toussuire.com only embeds the Lumiplan map).
+La Toussuire webcams (Skaping stills, no public viewer, so no live button; link to la-toussuire.com):
+`la-toussuire/les-lacs` (front de neige, 10 min), `toussuire/les-lutins` (10 min), `toussuire/pierre-du-turc` (20 min),
+plus `les-sybelles/ouillon`. Home-screen app: `manifest-toussuire.webmanifest` (swapped by an inline script in <head>).
+Render test: `HASH='?site=toussuire'`.
+
 ## Non-negotiables
 
 - **Free and open data only.** No paid APIs, no keys in the page. The only secret is the ECMWF Data Store key,

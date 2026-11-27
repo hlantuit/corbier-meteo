@@ -94,11 +94,12 @@ function nightBands(g, x, t0, t1, y0, y1) {
 // ========== 1. 48-hour meteogram (stacked panels sharing a time axis) ==========
 export function meteogram(el, data) {
   mount(el, (node, W) => {
-    const { c1550, c2265, c1300, now, obs } = data;
+    const { base, top, low, z: Z, names, now, obs } = data;
+    const zl = z => `${fmt(z, 0)} m`;
     const O = (obs || []).filter(o => o.time >= now - 24 * HOUR && o.time <= now);
     const t0 = now - (O.length ? 24 : 2) * HOUR; const t1 = now + 48 * HOUR;
     const sel = a => a.filter(d => d.time >= t0 && d.time <= t1 && d.n > 0);
-    const A = sel(c1550), S = sel(c2265), V = sel(c1300);
+    const A = sel(base), S = sel(top), V = sel(low);
     const OT = O.filter(o => o.t !== null && o.t !== undefined);
     if (!A.length) throw new Error('no data');
     const m = { l: 46, r: 64, t: 30, b: 26 };
@@ -134,7 +135,7 @@ export function meteogram(el, data) {
         g.append('line').attr('class', 'ref-line').attr('x1', m.l).attr('x2', W - m.r).attr('y1', yy(0)).attr('y2', yy(0)).attr('stroke', '#5aa9ff').attr('opacity', .6);
         g.append('path').datum(A).attr('fill', 'rgba(234,241,251,.10)').attr('d', d3.area().x(px).y0(d => yy(d.tMin)).y1(d => yy(d.tMax)).curve(d3.curveMonotoneX));
         const line = d3.line().x(px).y(d => yy(d.t)).curve(d3.curveMonotoneX).defined(d => d.t !== null);
-        const series = [{ d: V, c: '#2370cd', w: 1.6, lab: '1 300 m' }, { d: S, c: '#9dc8f7', w: 1.6, lab: '2 265 m' }, { d: A, c: COLORS.consensus, w: 2.4, lab: '1 550 m' }];
+        const series = [{ d: V, c: '#2370cd', w: 1.6, lab: zl(Z.low) }, { d: S, c: '#9dc8f7', w: 1.6, lab: zl(Z.top) }, { d: A, c: COLORS.consensus, w: 2.4, lab: zl(Z.base) }];
         series.forEach(s => g.append('path').datum(s.d).attr('fill', 'none').attr('stroke', s.c).attr('stroke-width', s.w).attr('stroke-linejoin', 'round').attr('stroke-linecap', 'round').attr('d', line));
         g.selectAll('circle.obs').data(OT).join('circle').attr('class', 'obs').attr('cx', d => x(paris(d.time))).attr('cy', d => yy(d.t)).attr('r', 2.6).attr('fill', COLORS.obs).attr('stroke', '#0b1220').attr('stroke-width', 1);
         // end labels with collision avoidance
@@ -180,7 +181,7 @@ export function meteogram(el, data) {
         g.append('path').datum(A).attr('fill', 'rgba(223,243,255,.08)').attr('d', d3.area().x(px).curve(d3.curveMonotoneX).defined(d => d.line !== null).y0(d => yy(d.line)).y1(yy(3200)));
         g.append('path').datum(A).attr('fill', 'rgba(223,243,255,.10)').attr('d', d3.area().x(px).curve(d3.curveMonotoneX).defined(d => d.lineMin !== null).y0(d => yy(d.lineMin)).y1(d => yy(d.lineMax)));
         g.append('path').datum(A).attr('fill', 'none').attr('stroke', COLORS.snow).attr('stroke-width', 2.2).attr('d', d3.line().x(px).y(d => yy(d.line)).curve(d3.curveMonotoneX).defined(d => d.line !== null));
-        [[1550, 'Le Corbier'], [2265, 'Pte du Corbier']].forEach(([z, lab]) => {
+        [[Z.base, names.base], [Z.top, names.top]].forEach(([z, lab]) => {
           g.append('line').attr('class', 'ref-line').attr('x1', m.l).attr('x2', W - m.r).attr('y1', yy(z)).attr('y2', yy(z)).attr('opacity', .9);
           g.append('text').attr('class', 'ref-text').attr('x', W - m.r + 8).attr('y', yy(z) + 4).text(lab);
         });
@@ -226,7 +227,7 @@ export function meteogram(el, data) {
         const s = S[Math.min(i, S.length - 1)], v = V[Math.min(i, V.length - 1)];
         const o = d.time <= now ? O.find(r => r.time === d.time) : null;
         showTip(evt, `<div class="tt-title">${dayLabel(paris(d.time))} · ${hourLabel(paris(d.time))}</div>` +
-          row('1 550 m', `${fmt(d.t, 1)} °C`, COLORS.consensus) + row('2 265 m', `${fmt(s && s.t, 1)} °C`, '#9dc8f7') + row('1 300 m', `${fmt(v && v.t, 1)} °C`, '#2370cd') +
+          row(zl(Z.base), `${fmt(d.t, 1)} °C`, COLORS.consensus) + row(zl(Z.top), `${fmt(s && s.t, 1)} °C`, '#9dc8f7') + row(zl(Z.low), `${fmt(v && v.t, 1)} °C`, '#2370cd') +
           row(t('leg.snow'), `${fmt(d.cm, 1)} cm`, COLORS.snow) + row(t('leg.rain'), `${fmt(d.rain, 1)} mm`, COLORS.rain) +
           row(t('now.snowline'), d.line !== null ? `${fmt(Math.round(d.line / 50) * 50)} m` : '–') +
           row(t('now.wind'), `${fmt(d.wind, 0)} / ${fmt(d.gust, 0)} km/h`) +

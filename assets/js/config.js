@@ -1,19 +1,62 @@
-// Site constants. Everything specific to Le Corbier lives here.
+// Site constants. One page serves several resorts of Les Sybelles: ?site=toussuire picks La Toussuire
+// (Node scripts: env SITE_ID). Everything that differs between resorts lives in RESORTS; what they share
+// (stations, map labels, snowpack, models) stays in COMMON.
+const RESORTS = {
+  corbier: {
+    id: 'corbier', name: 'Le Corbier', app: 'Corbier Météo',
+    at: { fr: 'au Corbier', en: 'at Le Corbier' }, of: { fr: 'du Corbier', en: 'of Le Corbier' },
+    // Front de neige (resort centre)
+    lat: 45.2406, lon: 6.2688, elev: 1550,
+    base: { z: 1550, name: 'Le Corbier' },
+    top: { z: 2265, name: 'Pointe du Corbier', short: 'Pte du Corbier' },
+    low: { z: 1300, name: 'Villarembert' },
+    // Elevation levels shown in snow-by-altitude views
+    levels: [
+      { z: 1300, fr: 'Villarembert', en: 'Villarembert' },
+      { z: 1550, fr: 'Le Corbier', en: 'Le Corbier' },
+      { z: 1900, fr: 'Mi-pentes', en: 'Mid-slopes' },
+      { z: 2265, fr: 'Pointe du Corbier', en: 'Pointe du Corbier' },
+      { z: 2430, fr: "L'Ouillon", en: "L'Ouillon" },
+    ],
+    map: { center: [6.2520, 45.2440], zoom: 12.7 },
+    resortPage: { fr: 'https://www.le-corbier.com/ouverture-des-pistes/', en: 'https://www.le-corbier.com/en/slope-snow-information/' },
+    camsPage: null,
+    dataDir: '', // baked files of this resort: data/<dataDir>climate.json, bulletin.json
+  },
+  toussuire: {
+    id: 'toussuire', name: 'La Toussuire', app: 'Toussuire Météo',
+    at: { fr: 'à La Toussuire', en: 'at La Toussuire' }, of: { fr: 'de La Toussuire', en: 'of La Toussuire' },
+    // Village centre / front de neige (IGN BD TOPO), 1,705 m
+    lat: 45.2539, lon: 6.2589, elev: 1700,
+    base: { z: 1700, name: 'La Toussuire' },
+    top: { z: 2206, name: 'Le Grand Truc', short: 'Grand Truc' },
+    low: { z: 1300, name: 'Les Bottières' },
+    levels: [
+      { z: 1300, fr: 'Les Bottières', en: 'Les Bottières' },
+      { z: 1700, fr: 'La Toussuire', en: 'La Toussuire' },
+      { z: 1950, fr: 'Mi-pentes', en: 'Mid-slopes' },
+      { z: 2206, fr: 'Le Grand Truc', en: 'Le Grand Truc' },
+      { z: 2430, fr: "L'Ouillon", en: "L'Ouillon" },
+    ],
+    map: { center: [6.2560, 45.2600], zoom: 12.7 },
+    // la-toussuire.com shows the Sybelles Lumiplan map only; the avalanche level comes from the le-corbier.com feed
+    // (same Météo-France massif, Maurienne), the open-run count there is Le Corbier's and is not shown here
+    resortPage: { fr: 'https://la-toussuire.com/info-live/infos-neige/', en: 'https://la-toussuire.com/en/info-live-en/' },
+    camsPage: 'https://la-toussuire.com/info-live/webcams/',
+    dataDir: 'toussuire/',
+  },
+};
+export const SITE_IDS = Object.keys(RESORTS);
+const pickId = () => {
+  let id = null;
+  try { if (typeof location !== 'undefined') id = new URLSearchParams(location.search).get('site'); } catch (e) { /* no location */ }
+  try { if (!id && typeof process !== 'undefined') id = process.env.SITE_ID; } catch (e) { /* no process */ }
+  return RESORTS[id] ? id : 'corbier';
+};
+const R = RESORTS[pickId()];
 export const SITE = {
-  name: 'Le Corbier',
-  // Front de neige (resort centre)
-  lat: 45.2406,
-  lon: 6.2688,
-  elev: 1550,
+  ...R,
   tz: 'Europe/Paris',
-  // Elevation levels shown in snow-by-altitude views
-  levels: [
-    { z: 1300, fr: 'Villarembert', en: 'Villarembert' },
-    { z: 1550, fr: 'Le Corbier', en: 'Le Corbier' },
-    { z: 1900, fr: 'Mi-pentes', en: 'Mid-slopes' },
-    { z: 2265, fr: 'Pointe du Corbier', en: 'Pointe du Corbier' },
-    { z: 2430, fr: "L'Ouillon", en: "L'Ouillon" },
-  ],
   // Météo-France automatic stations used for observations and verification
   // Le Corbier: manual snow observations (06 and 12 UTC) during the ski season, at the resort itself.
   // Saint-Jean-d'Arves: automatic hourly station 4 km away, same elevation, all year (temperature, precipitation, snow depth).
@@ -35,11 +78,7 @@ export const SITE = {
     { id: '73257005', name: 'Val Thorens', elev: 2277, lat: 45.294, lon: 6.581, slope: 7, aspect: 342 },
     { id: '73257001', name: 'Saint-Martin-de-Belleville', elev: 1443, lat: 45.368167, lon: 6.5105, slope: 17, aspect: 225 },
   ],
-  map: {
-    center: [6.2520, 45.2440],
-    zoom: 12.7,
-    bounds: [[6.02, 45.10], [6.52, 45.40]],
-  },
+  map: { ...R.map, bounds: [[6.02, 45.10], [6.52, 45.40]] },
   // Curated labels (positions from IGN BD TOPO, elevations from RGE ALTI)
   places: [
     { name: 'Le Corbier', lat: 45.2406, lon: 6.2688, z: 1555, kind: 'village' },
@@ -107,13 +146,23 @@ export const COLORS = {
 // Skaping webcams. Panoramic cameras store a still every `step` minutes (Paris time, at minute `offset`)
 // at skaping.s3…/<path>/<YYYY>/<MM>/<DD>/<size>/<HH>-<mm>.jpg (sizes: thumb 180 px, mini 360, small 480, large 720 high);
 // the live camera publishes a continuously refreshed thumbnail of its video stream.
-export const CAMS = [
+// `page` (Skaping viewer) opens in the card as the live view; cameras without one link to `link` instead.
+const CORBIER_CAMS = [
   { id: 'live', page: 'https://www.skaping.com/le-corbier/live', fr: 'Le Corbier en direct', en: 'Le Corbier live', subFr: 'Front de neige · 1 550 m', subEn: 'Snow front · 1,550 m',
     thumb: 'https://skaping.quanteec.com/contents/encodings/live/cf855356-9237-4153-746c-7561-6665-64-8b60-d9205323f770d/thumbnail.jpg' },
   { id: 'front', page: 'https://www.skaping.com/le-corbier/front-de-neige', fr: 'Front de neige, panorama', en: 'Snow front, panorama', subFr: 'Le Corbier · 1 550 m', subEn: 'Le Corbier · 1,550 m', path: 'le-corbier/front-de-neige/panoramique', step: 30, offset: 1 },
   { id: 'pointe', page: 'https://www.skaping.com/les-sybelles/pointe-du-corbier', fr: 'Pointe du Corbier', en: 'Pointe du Corbier', subFr: '2 265 m · vue sur les Aiguilles d’Arves', subEn: '2,265 m · view of the Aiguilles d’Arves', path: 'les-sybelles/pointe-du-corbier', step: 10, offset: 0 },
   { id: 'ouillon', page: 'https://www.skaping.com/les-sybelles/ouillon', fr: 'L’Ouillon', en: 'L’Ouillon', subFr: '2 426 m · sommet des Sybelles', subEn: '2,426 m · top of Les Sybelles', path: 'les-sybelles/ouillon', step: 10, offset: 0 },
 ];
+// La Toussuire's cameras (as listed on la-toussuire.com/info-live/webcams/); they have no public Skaping viewer
+const TOUSSUIRE_LINK = 'https://la-toussuire.com/info-live/webcams/';
+const TOUSSUIRE_CAMS = [
+  { id: 'front', link: TOUSSUIRE_LINK, fr: 'Front de neige', en: 'Snow front', subFr: 'La Toussuire · 1 700 m', subEn: 'La Toussuire · 1,700 m', path: 'la-toussuire/les-lacs', step: 10, offset: 0 },
+  { id: 'lutins', link: TOUSSUIRE_LINK, fr: 'Les Lutins', en: 'Les Lutins', subFr: 'La Toussuire · espace débutants', subEn: 'La Toussuire · beginners’ area', path: 'toussuire/les-lutins', step: 10, offset: 0 },
+  { id: 'turc', link: TOUSSUIRE_LINK, fr: 'Pierre de Turc', en: 'Pierre de Turc', subFr: 'La Toussuire · sur les pistes', subEn: 'La Toussuire · on the slopes', path: 'toussuire/pierre-du-turc', step: 20, offset: 0 },
+  { id: 'ouillon', page: 'https://www.skaping.com/les-sybelles/ouillon', fr: 'L’Ouillon', en: 'L’Ouillon', subFr: '2 426 m · sommet des Sybelles', subEn: '2,426 m · top of Les Sybelles', path: 'les-sybelles/ouillon', step: 10, offset: 0 },
+];
+export const CAMS = R.id === 'toussuire' ? TOUSSUIRE_CAMS : CORBIER_CAMS;
 export const SKAPING_S3 = 'https://skaping.s3.gra.io.cloud.ovh.net/';
 
 export const API = {

@@ -69,7 +69,12 @@ a:hover { text-decoration: underline; text-underline-offset: 3px; }
 .lang { display: flex; border: 1px solid var(--line-2); border-radius: 999px; padding: 3px; flex: none; }
 .lang button { all: unset; cursor: pointer; font-size: 12px; font-weight: 700; letter-spacing: .06em; padding: 5px 10px; border-radius: 999px; color: var(--ink-2); }
 .lang button[aria-pressed="true"] { background: var(--ink); color: #071020; }
-.lang button:focus-visible, .chip:focus-visible, .btn:focus-visible { outline: 2px solid var(--glacier); outline-offset: 2px; }
+.lang button:focus-visible, .chip:focus-visible, .btn:focus-visible, .site-switch a:focus-visible { outline: 2px solid var(--glacier); outline-offset: 2px; }
+/* resort switch (Le Corbier / La Toussuire), same pill as the language toggle */
+.site-switch { display: flex; border: 1px solid var(--line-2); border-radius: 999px; padding: 3px; flex: none; }
+.site-switch a { font-size: 12px; font-weight: 700; letter-spacing: .02em; padding: 5px 11px; border-radius: 999px; color: var(--ink-2); text-decoration: none; white-space: nowrap; }
+.site-switch a:hover { color: var(--ink); }
+.site-switch a[aria-current="page"] { background: rgba(127, 212, 255, .16); color: var(--ink); box-shadow: inset 0 0 0 1px rgba(127, 212, 255, .45); }
 
 /* ---------- Hero map ---------- */
 .hero { position: relative; height: clamp(620px, calc(100svh - 70px - var(--bh, 0px)), 1000px); margin: 0; overflow: hidden; border-bottom: 1px solid var(--line); --tlh: 150px; }
@@ -306,7 +311,9 @@ footer p { margin: 0 0 8px; }
 @media (max-width: 760px) {
   .brand .sub { display: none; }
   .nav { display: none; }
-  .lang { margin-left: auto; }
+  .site-switch { margin-left: auto; }
+  .site-switch a { padding: 5px 8px; }
+  .topbar { gap: 10px; }
   .hero { height: auto; min-height: 0; display: flex; flex-direction: column; }
   #map { position: relative; height: 62vh; min-height: 420px; }
   .hero::after { display: none; }

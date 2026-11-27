@@ -2,7 +2,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+import { fileURLToPath } from 'node:url';
+export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'); // fileURLToPath: also right on Windows
 export const sleep = ms => new Promise(r => setTimeout(r, ms));
 export const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 

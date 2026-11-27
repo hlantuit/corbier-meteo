@@ -58,10 +58,12 @@ jobs:
           echo "what=$W" >> "$GITHUB_OUTPUT"
           echo "Running: $W"
 
-      - name: Archive and snow depth
+      - name: Archive and snow depth (each resort at its own base elevation)
         if: contains(format(' {0} ', steps.plan.outputs.what), ' all ') || contains(format(' {0} ', steps.plan.outputs.what), ' climate ')
         continue-on-error: true
-        run: node scripts/update-climate.mjs
+        run: |
+          node scripts/update-climate.mjs
+          SITE_ID=toussuire node scripts/update-climate.mjs
 
       - name: Model verification (about 6 minutes)
         if: contains(format(' {0} ', steps.plan.outputs.what), ' all ') || contains(format(' {0} ', steps.plan.outputs.what), ' verification ')
@@ -107,7 +109,9 @@ jobs:
           AI_API_URL: ${{ vars.AI_API_URL }}
           AI_MODEL: ${{ vars.AI_MODEL }}
           AI_PROVIDER: ${{ vars.AI_PROVIDER }}
-        run: node scripts/update-bulletin.mjs
+        run: |
+          node scripts/update-bulletin.mjs
+          SITE_ID=toussuire node scripts/update-bulletin.mjs
 
       - name: Commit
         run: |

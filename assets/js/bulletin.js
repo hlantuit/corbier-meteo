@@ -4,7 +4,10 @@
 // and this draft to a language model (GitHub Models) for a more natural wording, baked into data/bulletin.json.
 
 const HOUR = 3600e3, DAY = 24 * HOUR;
-const BASE = 1550, TOP = 2265;
+import { SITE } from './config.js';
+const BASE = SITE.base.z, TOP = SITE.top.z;
+const AT = { fr: SITE.at.fr, en: SITE.at.en };
+const zTxt = (z, lang) => `${new Intl.NumberFormat(lang === 'fr' ? 'fr-FR' : 'en-GB').format(z)} m`;
 
 // Offset of Paris local time from UTC at a given instant (ms)
 export function parisOffset(ms) {
@@ -35,7 +38,7 @@ export function buildDigest({ now, cons, days, freshAt, interp, ens, pack, obsHs
   if (ens) ens.days.forEach((k, i) => { if (ens.dq[i]) ensByDay[k] = ens.dq[i]; });
   const out = {
     issued: new Date(now).toISOString(),
-    place: 'Le Corbier, Les Sybelles (Savoie)', base_m: BASE, top_m: TOP,
+    place: `${SITE.name}, Les Sybelles (Savoie)`, base_m: BASE, top_m: TOP,
     now: { t: r1(cur && cur.t), snowline_m: cur && cur.line !== null ? Math.round(cur.line / 50) * 50 : null },
     measured_snow_depth: obsHs ? { cm: r0(obsHs.cm), station: obsHs.where, hours_ago: Math.round((now - obsHs.time) / HOUR) } : null,
     days: [],
@@ -111,16 +114,16 @@ export function writeBulletin(g, lang = 'fr') {
   if (!snowy.length) {
     const ref = near[near.length - 1];
     const sky = T.sky(ref.cloud_pct_daytime);
-    out.push(fr ? `${cap(near.length > 1 ? `${T.today} et ${T.tomorrow}` : T.today)}, temps sec ${sky}, de ${num(ref.t_min, lang)} à ${num(ref.t_max, lang)} °C au Corbier.`
-      : `${cap(near.length > 1 ? `${T.today} and ${T.tomorrow}` : T.today)}: dry ${sky}, ${num(ref.t_min, lang)} to ${num(ref.t_max, lang)} °C at Le Corbier.`);
+    out.push(fr ? `${cap(near.length > 1 ? `${T.today} et ${T.tomorrow}` : T.today)}, temps sec ${sky}, de ${num(ref.t_min, lang)} à ${num(ref.t_max, lang)} °C ${AT.fr}.`
+      : `${cap(near.length > 1 ? `${T.today} and ${T.tomorrow}` : T.today)}: dry ${sky}, ${num(ref.t_min, lang)} to ${num(ref.t_max, lang)} °C ${AT.en}.`);
   } else {
     const b = snowy.reduce((a, x) => a + x.fresh_cm.base, 0), t = snowy.reduce((a, x) => a + x.fresh_cm.top, 0);
     const lines = snowy.map(x => x.snowline_m).filter(v => v !== null); const line = lines.length ? Math.round(lines.reduce((a, v) => a + v, 0) / lines.length / 100) * 100 : null;
     const rain = snowy.reduce((a, x) => a + x.rain_mm_base, 0);
-    if (b >= 1) out.push(fr ? `Neige attendue ${list(snowy)} : ≈ ${round5(b)} cm au Corbier et ${round5(t)} cm en haut des pistes${line ? `, limite pluie-neige vers ${num(line, lang)} m` : ''}.`
-      : `Snow ${list(snowy)}: about ${round5(b)} cm at Le Corbier and ${round5(t)} cm at the top of the slopes${line ? `, rain–snow line near ${num(line, lang)} m` : ''}.`);
-    else out.push(fr ? `Neige en altitude ${list(snowy)} (≈ ${round5(t)} cm à 2 265 m), mais ${rain >= 1 ? `pluie au Corbier (${Math.round(rain)} mm)` : 'presque rien au Corbier'}${line ? ` : limite vers ${num(line, lang)} m` : ''}.`
-      : `Snow up high ${list(snowy)} (about ${round5(t)} cm at 2,265 m), but ${rain >= 1 ? `rain at Le Corbier (${Math.round(rain)} mm)` : 'very little at Le Corbier'}${line ? `: snow line near ${num(line, lang)} m` : ''}.`);
+    if (b >= 1) out.push(fr ? `Neige attendue ${list(snowy)} : ≈ ${round5(b)} cm ${AT.fr} et ${round5(t)} cm en haut des pistes${line ? `, limite pluie-neige vers ${num(line, lang)} m` : ''}.`
+      : `Snow ${list(snowy)}: about ${round5(b)} cm ${AT.en} and ${round5(t)} cm at the top of the slopes${line ? `, rain–snow line near ${num(line, lang)} m` : ''}.`);
+    else out.push(fr ? `Neige en altitude ${list(snowy)} (≈ ${round5(t)} cm à ${zTxt(TOP, 'fr')}), mais ${rain >= 1 ? `pluie ${AT.fr} (${Math.round(rain)} mm)` : `presque rien ${AT.fr}`}${line ? ` : limite vers ${num(line, lang)} m` : ''}.`
+      : `Snow up high ${list(snowy)} (about ${round5(t)} cm at ${zTxt(TOP, 'en')}), but ${rain >= 1 ? `rain ${AT.en} (${Math.round(rain)} mm)` : `very little ${AT.en}`}${line ? `: snow line near ${num(line, lang)} m` : ''}.`);
   }
   // 2. days 3 to 7
   const mid = D.filter(x => x.d >= 2 && x.d <= 6);
@@ -146,12 +149,12 @@ export function writeBulletin(g, lang = 'fr') {
     const q = e.d14; const spread = (q.p90 - q.p10) / (q.p50 + 5);
     const conf = spread > 3 ? (fr ? 'signal très incertain' : 'a very uncertain signal') : spread > 1.5 ? (fr ? 'signal incertain' : 'an uncertain signal') : (fr ? 'signal assez net' : 'a fairly clear signal');
     const late = D.find(x => x.d >= 7 && x.ensemble_base_cm && x.ensemble_base_cm.chance_1cm_pct >= 50 && x.ensemble_base_cm.p50 >= 2);
-    out.push(fr ? `Tendance à 14 jours : ${q.p50 < 1 ? 'pas de neige notable en médiane au Corbier' : `≈ ${round5(q.p50)} cm de neige fraîche au Corbier en médiane`} (${q.p10} à ${q.p90} cm selon les 51 scénarios), ${e.chance_30cm_in_14d_pct} % de chances de dépasser 30 cm${late ? ` ; neige probable vers ${name(late)}` : ''} — ${conf}.`
-      : `14-day trend: ${q.p50 < 1 ? 'no significant snow at Le Corbier in the median' : `about ${round5(q.p50)} cm of fresh snow at Le Corbier in the median`} (${q.p10} to ${q.p90} cm across the 51 scenarios), ${e.chance_30cm_in_14d_pct} % chance of more than 30 cm${late ? `; snow likely around ${name(late)}` : ''} — ${conf}.`);
+    out.push(fr ? `Tendance à 14 jours : ${q.p50 < 1 ? `pas de neige notable en médiane ${AT.fr}` : `≈ ${round5(q.p50)} cm de neige fraîche ${AT.fr} en médiane`} (${q.p10} à ${q.p90} cm selon les 51 scénarios), ${e.chance_30cm_in_14d_pct} % de chances de dépasser 30 cm${late ? ` ; neige probable vers ${name(late)}` : ''} — ${conf}.`
+      : `14-day trend: ${q.p50 < 1 ? `no significant snow ${AT.en} in the median` : `about ${round5(q.p50)} cm of fresh snow ${AT.en} in the median`} (${q.p10} to ${q.p90} cm across the 51 scenarios), ${e.chance_30cm_in_14d_pct} % chance of more than 30 cm${late ? `; snow likely around ${name(late)}` : ''} — ${conf}.`);
   } else {
     const far = D.filter(x => x.d >= 7); const t = far.reduce((a, x) => a + x.fresh_cm.base, 0);
-    if (far.length) out.push(fr ? `Tendance à 14 jours (modèles déterministes, peu fiables à cette échéance) : ≈ ${round5(t)} cm au Corbier entre ${name(far[0])} et ${name(far[far.length - 1])}.`
-      : `14-day trend (deterministic models, low skill at this range): about ${round5(t)} cm at Le Corbier between ${name(far[0])} and ${name(far[far.length - 1])}.`);
+    if (far.length) out.push(fr ? `Tendance à 14 jours (modèles déterministes, peu fiables à cette échéance) : ≈ ${round5(t)} cm ${AT.fr} entre ${name(far[0])} et ${name(far[far.length - 1])}.`
+      : `14-day trend (deterministic models, low skill at this range): about ${round5(t)} cm ${AT.en} between ${name(far[0])} and ${name(far[far.length - 1])}.`);
   }
   return out.join(' ');
 }
