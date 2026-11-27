@@ -7,6 +7,10 @@ const HOUR = 3600e3;
 
 // ---------- infrastructure ----------
 const mounted = new Map();
+// y-axis ticks with just enough decimals to tell neighbouring ticks apart (step 0.2 → 1 decimal, 50 → none)
+const yDigits = (scale, n) => { const [a, b] = scale.domain(); const step = d3.tickStep(Math.min(a, b), Math.max(a, b), n); return Math.max(0, Math.min(3, d3.precisionFixed(step || 1))); };
+const yFmt = (scale, n, extra = 0) => { const dg = Math.max(extra, yDigits(scale, n)); return d => fmt(d, dg); };
+
 export function mount(el, render) {
   if (typeof el === 'string') el = document.getElementById(el);
   if (!el) return;
@@ -126,7 +130,7 @@ export function meteogram(el, data) {
         const vals = [...A.flatMap(d => [d.tMin, d.tMax]), ...S.map(d => d.t), ...V.map(d => d.t), ...OT.map(o => o.t)].filter(v => v !== null);
         const yy = d3.scaleLinear().domain(d3.extent([...vals, 0])).nice().range([p.y1, p.y0]);
         g.append('g').attr('class', 'grid').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(yy).ticks(4).tickSize(-(W - m.l - m.r)).tickFormat(''));
-        g.append('g').attr('class', 'axis').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(yy).ticks(4).tickSize(0).tickPadding(8)).call(s => s.select('.domain').remove());
+        g.append('g').attr('class', 'axis').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(yy).ticks(4).tickSize(0).tickPadding(8).tickFormat(yFmt(yy, 4))).call(s => s.select('.domain').remove());
         g.append('line').attr('class', 'ref-line').attr('x1', m.l).attr('x2', W - m.r).attr('y1', yy(0)).attr('y2', yy(0)).attr('stroke', '#5aa9ff').attr('opacity', .6);
         g.append('path').datum(A).attr('fill', 'rgba(234,241,251,.10)').attr('d', d3.area().x(px).y0(d => yy(d.tMin)).y1(d => yy(d.tMax)).curve(d3.curveMonotoneX));
         const line = d3.line().x(px).y(d => yy(d.t)).curve(d3.curveMonotoneX).defined(d => d.t !== null);
@@ -146,7 +150,7 @@ export function meteogram(el, data) {
         const maxP = Math.max(1, d3.max(A.filter(d => !O.length || d.time > now), d => d.p || 0), d3.max(O, o => o.rr || 0) || 0);
         const yy = d3.scaleLinear().domain([0, maxP]).nice().range([p.y1, p.y0]);
         g.append('g').attr('class', 'grid').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(yy).ticks(3).tickSize(-(W - m.l - m.r)).tickFormat(''));
-        g.append('g').attr('class', 'axis').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(yy).ticks(3).tickSize(0).tickPadding(8)).call(s => s.select('.domain').remove());
+        g.append('g').attr('class', 'axis').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(yy).ticks(3).tickSize(0).tickPadding(8).tickFormat(yFmt(yy, 3))).call(s => s.select('.domain').remove());
         const bw = Math.max(2, Math.min(12, (x(paris(now + HOUR)) - x(paris(now))) - 2));
         // past hours: what was measured; future: the forecast split into rain and snow
         const bars = A.filter(d => d.p > 0.02 && (!O.length || d.time > now));
@@ -187,7 +191,7 @@ export function meteogram(el, data) {
       if (p.key === 'wind') {
         const yy = d3.scaleLinear().domain([0, Math.max(30, d3.max(A, d => d.gust || 0))]).nice().range([p.y1, p.y0]);
         g.append('g').attr('class', 'grid').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(yy).ticks(3).tickSize(-(W - m.l - m.r)).tickFormat(''));
-        g.append('g').attr('class', 'axis').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(yy).ticks(3).tickSize(0).tickPadding(8)).call(s => s.select('.domain').remove());
+        g.append('g').attr('class', 'axis').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(yy).ticks(3).tickSize(0).tickPadding(8).tickFormat(yFmt(yy, 3))).call(s => s.select('.domain').remove());
         g.append('path').datum(A).attr('fill', 'rgba(152,135,239,.16)').attr('d', d3.area().x(px).y0(d => yy(d.wind || 0)).y1(d => yy(d.gust || 0)).curve(d3.curveMonotoneX));
         g.append('path').datum(A).attr('fill', 'none').attr('stroke', '#9887ef').attr('stroke-width', 2).attr('d', d3.line().x(px).y(d => yy(d.wind || 0)).curve(d3.curveMonotoneX));
         const arrows = A.filter(d => d.dir !== null && Math.round(d.time / HOUR) % 3 === 0);
@@ -294,7 +298,7 @@ export function ensembleDaily(el, st, now, past = []) {
     const maxV = Math.max(10, d3.max(days, o => o.q.p90), d3.max(obs, o => o.cm) || 0);
     const y = d3.scaleLinear().domain([0, maxV]).nice().range([H - m.b, m.t]);
     svg.append('g').attr('class', 'grid').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(4).tickSize(-(W - m.l - m.r)).tickFormat(''));
-    svg.append('g').attr('class', 'axis').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(4).tickSize(0).tickPadding(8)).call(s => s.select('.domain').remove());
+    svg.append('g').attr('class', 'axis').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(4).tickSize(0).tickPadding(8).tickFormat(yFmt(y, 4))).call(s => s.select('.domain').remove());
     svg.append('text').attr('class', 'ref-text').attr('x', m.l).attr('y', 12).text('cm');
     const bw = Math.min(24, x.bandwidth());
     const g = svg.append('g');
@@ -351,7 +355,7 @@ export function ensembleTemp(el, ens, st) {
     const vals = st.tq.filter(Boolean);
     const y = d3.scaleLinear().domain([Math.min(-12, d3.min(vals, q => q.p10) - 2), Math.max(6, d3.max(vals, q => q.p90) + 2)]).nice().range([H - m.b, m.t]);
     svg.append('g').attr('class', 'grid').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(-(W - m.l - m.r)).tickFormat(''));
-    svg.append('g').attr('class', 'axis').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(0).tickPadding(8).tickFormat(d => `${d}°`)).call(s => s.select('.domain').remove());
+    svg.append('g').attr('class', 'axis').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(0).tickPadding(8).tickFormat(d => `${yFmt(y, 5)(d)}°`)).call(s => s.select('.domain').remove());
     svg.append('g').attr('class', 'axis').attr('transform', `translate(0,${H - m.b + 4})`).call(d3.axisBottom(x).ticks(d3.utcDay.every(W < 600 ? 3 : 2)).tickSize(0).tickPadding(6).tickFormat(d => dayLabel(+d))).call(s => s.select('.domain').remove());
     svg.append('line').attr('x1', m.l).attr('x2', W - m.r).attr('y1', y(0)).attr('y2', y(0)).attr('stroke', '#5aa9ff').attr('opacity', .6);
     const line = d3.line().x((d, i) => x(T[i])).y(d => y(d)).defined(d => d !== null && d !== undefined).curve(d3.curveMonotoneX);
@@ -380,7 +384,7 @@ export function ensembleCum(el, st) {
     const x = d3.scaleUtc().domain(d3.extent(D)).range([m.l, W - m.r]);
     const y = d3.scaleLinear().domain([0, Math.max(20, d3.max(data, o => o.q.p90))]).nice().range([H - m.b, m.t]);
     svg.append('g').attr('class', 'grid').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(-(W - m.l - m.r)).tickFormat(''));
-    svg.append('g').attr('class', 'axis').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(0).tickPadding(8)).call(s => s.select('.domain').remove());
+    svg.append('g').attr('class', 'axis').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(0).tickPadding(8).tickFormat(yFmt(y, 5))).call(s => s.select('.domain').remove());
     svg.append('g').attr('class', 'axis').attr('transform', `translate(0,${H - m.b + 4})`).call(d3.axisBottom(x).ticks(d3.utcDay.every(W < 500 ? 4 : 3)).tickSize(0).tickPadding(6).tickFormat(d => dayLabel(+d))).call(s => s.select('.domain').remove());
     const area = (a, b) => d3.area().x(o => x(o.x)).y0(o => y(o.q[a])).y1(o => y(o.q[b])).curve(d3.curveMonotoneX);
     svg.append('path').datum(data).attr('fill', 'rgba(127,212,255,.14)').attr('d', area('p10', 'p90'));
@@ -411,7 +415,7 @@ export function comparator(el, series, consensusSeries, opts) {
     const ext = d3.extent(all, d => d.v); if (opts.zeroBased) ext[0] = 0;
     const y = d3.scaleLinear().domain(ext).nice().range([H - m.b, m.t]);
     svg.append('g').attr('class', 'grid').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(-(W - m.l - m.r)).tickFormat(''));
-    svg.append('g').attr('class', 'axis').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(0).tickPadding(8).tickFormat(d => fmt(d))).call(s => s.select('.domain').remove());
+    svg.append('g').attr('class', 'axis').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(0).tickPadding(8).tickFormat(yFmt(y, 5))).call(s => s.select('.domain').remove());
     svg.append('g').attr('class', 'axis').attr('transform', `translate(0,${H - m.b + 4})`).call(d3.axisBottom(x).ticks(d3.utcDay.every(W < 700 ? 3 : 1)).tickSize(0).tickPadding(6).tickFormat(d => dayLabel(+d))).call(s => s.select('.domain').remove());
     svg.append('text').attr('class', 'ref-text').attr('x', m.l).attr('y', m.t - 2).text(opts.unit);
     if (opts.zeroLine) svg.append('line').attr('x1', m.l).attr('x2', W - m.r).attr('y1', y(0)).attr('y2', y(0)).attr('stroke', '#5aa9ff').attr('opacity', .6);
@@ -425,7 +429,7 @@ export function comparator(el, series, consensusSeries, opts) {
     if (opts.endLabels) {
       const ends = series.concat([{ short: t('leg.consensus').split(' ')[0], color: COLORS.consensus, values: consensusSeries }]).map(s => {
         const v = s.values.filter(d => d.v !== null && d.v !== undefined); const l = v[v.length - 1];
-        return l ? { y: y(l.v), x: x(paris(l.time)), lab: `${s.short} ${fmt(l.v, 0)}`, c: s.color || '#6b7d97' } : null;
+        return l ? { y: y(l.v), x: x(paris(l.time)), lab: `${s.short} ${fmt(l.v, yDigits(y, 5))}`, c: s.color || '#6b7d97' } : null;
       }).filter(Boolean).filter(e => e.x > W - m.r - 40).sort((a, b) => a.y - b.y);
       for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 12) ends[i].y = ends[i - 1].y + 12;
       ends.forEach(e => { svg.append('circle').attr('cx', W - m.r + 6).attr('cy', e.y).attr('r', 3).attr('fill', e.c); svg.append('text').attr('class', 'tick').attr('x', W - m.r + 13).attr('y', e.y + 4).style('font-size', '10.5px').text(e.lab); });
@@ -453,7 +457,7 @@ export function anomalyBars(el, items, opts) {
     const y = d3.scaleLinear().domain([-ext, ext]).nice().range([H - m.b, m.t]);
     const x = d3.scaleBand().domain(items.map((_, i) => i)).range([m.l, W - m.r]).padding(0.35);
     svg.append('g').attr('class', 'grid').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(-(W - m.l - m.r)).tickFormat(''));
-    svg.append('g').attr('class', 'axis').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(0).tickPadding(8).tickFormat(d => (d > 0 ? '+' : '') + fmt(d, opts.digits || 0))).call(s => s.select('.domain').remove());
+    svg.append('g').attr('class', 'axis').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(0).tickPadding(8).tickFormat(d => (d > 0 ? '+' : '') + yFmt(y, 5, opts.digits || 0)(d))).call(s => s.select('.domain').remove());
     svg.append('line').attr('x1', m.l).attr('x2', W - m.r).attr('y1', y(0)).attr('y2', y(0)).attr('stroke', '#55657d');
     svg.append('text').attr('class', 'ref-text').attr('x', m.l).attr('y', m.t - 4).text(opts.unit);
     const bw = Math.min(26, x.bandwidth());
@@ -530,7 +534,7 @@ export function archiveCum(el, clim) {
     const ymax = Math.max(d3.max(clim.pct.p90), d3.max(clim.current.filter(v => v !== null)) || 0, d3.max(clim.last || [0]));
     const y = d3.scaleLinear().domain([0, ymax]).nice().range([H - m.b, m.t]);
     svg.append('g').attr('class', 'grid').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(-(W - m.l - m.r)).tickFormat(''));
-    svg.append('g').attr('class', 'axis').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(0).tickPadding(8)).call(s => s.select('.domain').remove());
+    svg.append('g').attr('class', 'axis').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(0).tickPadding(8).tickFormat(yFmt(y, 5))).call(s => s.select('.domain').remove());
     svg.append('g').attr('class', 'axis').attr('transform', `translate(0,${H - m.b + 4})`).call(d3.axisBottom(x).ticks(d3.utcMonth.every(1)).tickSize(0).tickPadding(6).tickFormat(d => fmtUtc(+d, { month: 'short' }))).call(s => s.select('.domain').remove());
     svg.append('text').attr('class', 'ref-text').attr('x', m.l).attr('y', m.t - 2).text('cm');
     const idx = d3.range(n);
@@ -567,7 +571,7 @@ export function archiveDepth(el, seasons) {
     const x = d3.scaleUtc().domain([X(0), X(n - 1)]).range([m.l, W - m.r]);
     const y = d3.scaleLinear().domain([0, Math.max(40, d3.max(seasons.flatMap(s => s.values.filter(v => v !== null))))]).nice().range([H - m.b, m.t]);
     svg.append('g').attr('class', 'grid').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(-(W - m.l - m.r)).tickFormat(''));
-    svg.append('g').attr('class', 'axis').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(0).tickPadding(8)).call(s => s.select('.domain').remove());
+    svg.append('g').attr('class', 'axis').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(0).tickPadding(8).tickFormat(yFmt(y, 5))).call(s => s.select('.domain').remove());
     svg.append('g').attr('class', 'axis').attr('transform', `translate(0,${H - m.b + 4})`).call(d3.axisBottom(x).ticks(d3.utcMonth.every(1)).tickSize(0).tickPadding(6).tickFormat(d => fmtUtc(+d, { month: 'short' }))).call(s => s.select('.domain').remove());
     svg.append('text').attr('class', 'ref-text').attr('x', m.l).attr('y', m.t - 2).text('cm');
     const pal = ['#9887ef', '#00a888', '#e24d8b', '#d28e05'];
@@ -616,7 +620,7 @@ export function archiveTotals(el, clim) {
     const x = d3.scaleBand().domain(d.map(w => w.year)).range([m.l, W - m.r]).padding(0.18);
     const y = d3.scaleLinear().domain([0, d3.max(d, w => w.snow)]).nice().range([H - m.b, m.t]);
     svg.append('g').attr('class', 'grid').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(4).tickSize(-(W - m.l - m.r)).tickFormat(''));
-    svg.append('g').attr('class', 'axis').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(4).tickSize(0).tickPadding(8)).call(s => s.select('.domain').remove());
+    svg.append('g').attr('class', 'axis').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(4).tickSize(0).tickPadding(8).tickFormat(yFmt(y, 4))).call(s => s.select('.domain').remove());
     svg.append('g').attr('class', 'axis').attr('transform', `translate(0,${H - m.b + 4})`).call(d3.axisBottom(x).tickValues(d.map(w => w.year).filter(yy => yy % 10 === 0)).tickSize(0).tickPadding(6)).call(s => s.select('.domain').remove());
     svg.append('text').attr('class', 'ref-text').attr('x', m.l).attr('y', m.t - 4).text('cm');
     const bw = Math.min(24, x.bandwidth());
