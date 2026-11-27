@@ -1,5 +1,5 @@
 {
- "generated": "2026-11-27T08:37:02.492Z",
+ "generated": "2026-11-27T08:43:06.447Z",
  "used": true,
  "verdict": "calibrated constants beat the hand-set ones out of sample",
  "params": {
