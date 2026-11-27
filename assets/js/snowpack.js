@@ -8,6 +8,23 @@ import { wetBulb, snowDensity, clamp } from './data.js';
 import { LAPSE, SITE } from './config.js';
 
 const HOUR = 3600e3, DAY = 24 * HOUR;
+
+// Model constants. The defaults are the hand-set values; scripts/calibrate-snowpack.mjs fits them over past winters
+// against Météo-France snow depths and the page loads the result (data/snowcal.json) with setParams().
+//   k, dT     precipitation factor and temperature offset (centre of the live fit's priors)
+//   grad      extra precipitation per 1,000 m above 1,550 m (fraction)
+//   ddfW/S    degree-day melt factor at the winter / summer solstice (mm per °C per day)
+//   twMid     wet-bulb (°C) at which precipitation is half snow (all snow 0.75 °C below, all rain 0.75 °C above)
+//   tauCold   settling time scale of cold snow (h); rhoCold its final density (kg/m³)
+export const DEFAULTS = { k: 1, dT: 0, grad: 0, ddfW: 2, ddfS: 5, twMid: 0.75, tauCold: 120, rhoCold: 350 };
+export const P = { ...DEFAULTS };
+let settleCold = Math.exp(-1 / P.tauCold);
+export function setParams(p) {
+  for (const k of Object.keys(DEFAULTS)) if (p && Number.isFinite(p[k])) P[k] = p[k];
+  settleCold = Math.exp(-1 / P.tauCold); ddfCache.clear();
+}
+const precipAt = z => Math.max(0.3, 1 + P.grad * (z - 1550) / 1000);
+const snowFrac = tw => clamp((P.twMid + 0.75 - tw) / 1.5, 0, 1);
 export const BANDS = []; for (let z = 400; z <= 3600; z += 100) BANDS.push(z);
 
 export function seasonStart(now = Date.now()) {
@@ -15,14 +32,17 @@ export function seasonStart(now = Date.now()) {
   return Math.max(Date.UTC(y, 9, 1), Math.floor((now - 240 * DAY) / DAY) * DAY);
 }
 
-// Degree-day melt factor (mm per °C per hour): 2 mm/°C/day at the winter solstice, 5 at the summer solstice
+// Degree-day melt factor (mm per °C per hour): ddfW mm/°C/day at the winter solstice, ddfS at the summer solstice
+const ddfCache = new Map();
 function ddf(ms) {
-  const y = new Date(ms).getUTCFullYear(); const doy = (ms - Date.UTC(y, 0, 1)) / DAY;
-  return (2 + 1.5 * (1 - Math.cos(2 * Math.PI * (doy - 355) / 365))) / 24;
+  const y = new Date(ms).getUTCFullYear(); const doy = Math.floor((ms - Date.UTC(y, 0, 1)) / DAY);
+  let v = ddfCache.get(doy);
+  if (v === undefined) { v = (P.ddfW + (P.ddfS - P.ddfW) / 2 * (1 - Math.cos(2 * Math.PI * (doy - 355) / 365))) / 24; ddfCache.set(doy, v); }
+  return v;
 }
 
 // One hour of snowpack. st = { s: water equivalent (mm), h: depth (cm) }; dd = melt factor for that hour
-const SETTLE_COLD = Math.exp(-1 / 120), SETTLE_WARM = Math.exp(-1 / 36);
+const SETTLE_WARM = Math.exp(-1 / 36);
 function step(st, swe, rain, T, dd) {
   if (swe > 0) { st.s += swe; st.h += swe / snowDensity(T) * 100; }
   if (st.s <= 0) { st.s = 0; st.h = 0; return; }
@@ -31,27 +51,28 @@ function step(st, swe, rain, T, dd) {
     const f = Math.max(0, 1 - m / st.s); st.s *= f; st.h *= f;
   }
   if (st.s < 0.2) { st.s = 0; st.h = 0; return; }
-  // settling towards 350 kg/m³ (cold snow) or 450 kg/m³ (wet snow)
-  const warm = T > 0, rmax = warm ? 450 : 350;
+  // settling towards rhoCold (cold snow, 350 kg/m³ by default) or 450 kg/m³ (wet snow)
+  const warm = T > 0, rmax = warm ? Math.max(450, P.rhoCold) : P.rhoCold;
   let rho = 100 * st.s / st.h;
-  if (rho < rmax) { rho = rmax - (rmax - rho) * (warm ? SETTLE_WARM : SETTLE_COLD); st.h = 100 * st.s / rho; }
+  if (rho < rmax) { rho = rmax - (rmax - rho) * (warm ? SETTLE_WARM : settleCold); st.h = 100 * st.s / rho; }
 }
 
 // Phase and temperature of the past forcing at elevation z, for a temperature offset dT
-function pastPhase(hist, z, dT) {
+export function pastPhase(hist, z, dT) {
   const n = hist.time.length, T = new Float32Array(n), f = new Float32Array(n);
   for (let i = 0; i < n; i++) {
     const t = hist.t[i] === null ? 0 : hist.t[i] + LAPSE * (z - hist.z0) + dT;
-    T[i] = t; f[i] = clamp((1.5 - wetBulb(t, hist.rh[i] ?? 90)) / 1.5, 0, 1);
+    T[i] = t; f[i] = snowFrac(wetBulb(t, hist.rh[i] ?? 90));
   }
-  return { T, f };
+  return { T, f, pz: precipAt(z) };
 }
 
-function runPast(hist, ph, k, until, visit, meltScale) {
+const ddfKey = () => `${P.ddfW}/${P.ddfS}`;
+export function runPast(hist, ph, k, until, visit, meltScale) {
   const st = { s: 0, h: 0 };
-  if (!hist.dd) hist.dd = Float32Array.from(hist.time, ddf);
+  if (!hist.dd || hist.ddKey !== ddfKey()) { hist.dd = Float32Array.from(hist.time, ddf); hist.ddKey = ddfKey(); }
   for (let i = 0; i < hist.time.length && hist.time[i] <= until; i++) {
-    const p = (hist.p[i] || 0) * k;
+    const p = (hist.p[i] || 0) * k * ph.pz;
     step(st, p * ph.f[i], p * (1 - ph.f[i]), ph.T[i], meltScale ? hist.dd[i] * meltScale(hist.time[i]) : hist.dd[i]);
     if (visit) visit(i, st);
   }
@@ -112,7 +133,7 @@ export function snowObservations(daily, hourlyStJean, now) {
 // obs: [{ time, z, hs, w, wd, station }] — hourly timestamps (UTC); w = fitting weight, wd = distance weight
 function fit(hist, obs, until) {
   const use = obs.filter(o => o.time >= hist.time[0] && o.time <= until);
-  if (use.length < 3) return { k: 1, dT: 0, rmse: null, n: use.length };
+  if (use.length < 3) return { k: P.k, dT: P.dT, rmse: null, n: use.length };
   const groups = [...new Set(use.map(o => o.z))].map(z => {
     const m = new Map();
     use.filter(o => o.z === z).forEach(o => { const i = Math.round((o.time - hist.time[0]) / HOUR); if (!m.has(i)) m.set(i, []); m.get(i).push(o); });
@@ -120,7 +141,7 @@ function fit(hist, obs, until) {
   });
   let best = null; const phaseCache = new Map();
   const tryOne = (k, dT) => {
-    if (k < 0.6 - 1e-9 || k > 1.8 + 1e-9 || dT < -2 - 1e-9 || dT > 2 + 1e-9) return;
+    if (k < P.k - 0.4 - 1e-9 || k > P.k + 0.8 + 1e-9 || dT < P.dT - 2 - 1e-9 || dT > P.dT + 2 + 1e-9) return;
     const key = dT.toFixed(3);
     if (!phaseCache.has(key)) phaseCache.set(key, groups.map(g => pastPhase(hist, g.z, dT)));
     const phases = phaseCache.get(key);
@@ -129,11 +150,11 @@ function fit(hist, obs, until) {
       const a = g.m.get(i); if (a) for (const o of a) { se += o.w * (st.h - o.hs) ** 2; sw += o.w; }
     }));
     const mse = sw ? se / sw : 0;
-    // weak priors: no precipitation factor, no temperature offset
-    const cost = mse + 25 * ((k - 1) / 0.5) ** 2 + 25 * (dT / 1.5) ** 2;
+    // weak priors centred on the multi-winter calibration (P.k, P.dT; 1 and 0 before any calibration)
+    const cost = mse + 25 * ((k - P.k) / 0.5) ** 2 + 25 * ((dT - P.dT) / 1.5) ** 2;
     if (!best || cost < best.cost) best = { k: +k.toFixed(2), dT: +dT.toFixed(2), cost, rmse: Math.sqrt(mse) };
   };
-  for (let dT = -2; dT <= 2.001; dT += 0.5) for (let k = 0.6; k <= 1.801; k += 0.2) tryOne(k, dT);
+  for (let dT = P.dT - 2; dT <= P.dT + 2.001; dT += 0.5) for (let k = P.k - 0.4; k <= P.k + 0.801; k += 0.2) tryOne(+k.toFixed(2), +dT.toFixed(2));
   const c = { ...best };
   for (let dT = c.dT - 0.5; dT <= c.dT + 0.501; dT += 0.25) for (let k = c.k - 0.2; k <= c.k + 0.201; k += 0.1) tryOne(+k.toFixed(2), +dT.toFixed(2));
   return { ...best, n: use.length };

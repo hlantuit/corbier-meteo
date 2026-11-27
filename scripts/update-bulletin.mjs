@@ -19,6 +19,8 @@ const PROVIDER = process.env.AI_PROVIDER || (API_URL ? new URL(API_URL).hostname
 const log = (...a) => console.log('[bulletin]', ...a);
 const now = Date.now();
 
+const cal = fs.existsSync('data/snowcal.json') ? JSON.parse(fs.readFileSync('data/snowcal.json', 'utf8')) : null;
+if (cal && cal.used && cal.params) SP.setParams(cal.params);
 const verif = fs.existsSync('data/verification.json') ? JSON.parse(fs.readFileSync('data/verification.json', 'utf8')) : null;
 const calib = D.makeCalibration(verif);
 const fc = D.applyCalibration(await D.fetchModels(), calib, now);

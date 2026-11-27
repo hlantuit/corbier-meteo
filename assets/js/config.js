@@ -26,6 +26,8 @@ export const SITE = {
     { id: '73318400', name: 'Le Corbier', elev: 1585, lat: 45.243333, lon: 6.266667, manual: true },
     { id: '73242003', name: "Saint-Jean-d'Arves", elev: 1573, lat: 45.206833, lon: 6.278833 },
     { id: '73280001', name: "Saint-Sorlin-d'Arves", elev: 1694, lat: 45.224, lon: 6.216333 },
+    // nivo 07466, manual morning report at the top of the Choseaux chairlift (in season)
+    { id: '73280402', name: "Saint-Sorlin 2 090 m", elev: 2090, lat: 45.217167, lon: 6.2025, manual: true },
     { id: '73013002', name: 'Albiez-Montrond', elev: 1633, lat: 45.210667, lon: 6.336333 },
     { id: '73307400', name: 'Valmeinier', elev: 1788, lat: 45.176, lon: 6.493833 },
     { id: '73257005', name: 'Val Thorens', elev: 2277, lat: 45.294, lon: 6.581 },

@@ -1,0 +1,552 @@
+{
+ "generated": "2026-11-27T08:37:02.492Z",
+ "used": true,
+ "verdict": "calibrated constants beat the hand-set ones out of sample",
+ "params": {
+  "k": 1.1,
+  "dT": 0,
+  "grad": 0,
+  "ddfW": 0.1,
+  "ddfS": 4.875,
+  "twMid": -0.531,
+  "tauCold": 187.5,
+  "rhoCold": 357.5
+ },
+ "defaults": {
+  "k": 1,
+  "dT": 0,
+  "grad": 0,
+  "ddfW": 2,
+  "ddfS": 5,
+  "twMid": 0.75,
+  "tauCold": 120,
+  "rhoCold": 350
+ },
+ "forcing": "Open-Meteo historical forecasts at Le Corbier 1,550 m (mean of icon_seamless, meteofrance_seamless, ecmwf_ifs025)",
+ "observations": "Météo-France daily snow depth at 06 UTC (NEIGETOT06), Savoie daily climatological files, data.gouv.fr",
+ "stations": [
+  {
+   "id": "73318400",
+   "name": "Le Corbier",
+   "z": 1585,
+   "km": 0.3,
+   "weight": 0.97
+  },
+  {
+   "id": "73242003",
+   "name": "Saint-Jean-d'Arves",
+   "z": 1573,
+   "km": 3.8,
+   "weight": 0.73
+  },
+  {
+   "id": "73280001",
+   "name": "Saint-Sorlin-d'Arves",
+   "z": 1694,
+   "km": 4.5,
+   "weight": 0.69
+  },
+  {
+   "id": "73280402",
+   "name": "Saint-Sorlin 2 090 m",
+   "z": 2090,
+   "km": 5.8,
+   "weight": 0.62
+  },
+  {
+   "id": "73013002",
+   "name": "Albiez-Montrond",
+   "z": 1633,
+   "km": 6.3,
+   "weight": 0.59
+  },
+  {
+   "id": "73307400",
+   "name": "Valmeinier",
+   "z": 1788,
+   "km": 19.1,
+   "weight": 0.2
+  },
+  {
+   "id": "73257005",
+   "name": "Val Thorens",
+   "z": 2277,
+   "km": 25.2,
+   "weight": 0.12
+  },
+  {
+   "id": "73257001",
+   "name": "Saint-Martin-de-Belleville",
+   "z": 1443,
+   "km": 23.7,
+   "weight": 0.14
+  }
+ ],
+ "winters": [
+  {
+   "winter": "2022-23",
+   "observations": 1027,
+   "stations": 7
+  },
+  {
+   "winter": "2023-24",
+   "observations": 1625,
+   "stations": 8
+  },
+  {
+   "winter": "2024-25",
+   "observations": 1614,
+   "stations": 8
+  },
+  {
+   "winter": "2025-26",
+   "observations": 1577,
+   "stations": 8
+  },
+  {
+   "winter": "2026-27",
+   "observations": 278,
+   "stations": 5
+  }
+ ],
+ "skill": {
+  "rmseCm": {
+   "free": {
+    "default": 21.7,
+    "calibrated": 16.8
+   },
+   "live": {
+    "default": 13.3,
+    "calibrated": 12.2
+   }
+  },
+  "heldOut": [
+   {
+    "winter": "2022-23",
+    "n": 1027,
+    "free": {
+     "default": 20.8,
+     "calibrated": 12.9
+    },
+    "live": {
+     "default": 11.8,
+     "calibrated": 9.3
+    },
+    "params": {
+     "k": 1.15,
+     "dT": 0,
+     "grad": 0,
+     "ddfW": 0.1,
+     "ddfS": 5,
+     "twMid": -0.75,
+     "tauCold": 187.5,
+     "rhoCold": 400
+    }
+   },
+   {
+    "winter": "2023-24",
+    "n": 1625,
+    "free": {
+     "default": 18.6,
+     "calibrated": 21.6
+    },
+    "live": {
+     "default": 12.6,
+     "calibrated": 12.4
+    },
+    "params": {
+     "k": 1.137,
+     "dT": 0,
+     "grad": 0.15,
+     "ddfW": 0.1,
+     "ddfS": 6,
+     "twMid": -0.25,
+     "tauCold": 127.5,
+     "rhoCold": 375
+    }
+   },
+   {
+    "winter": "2024-25",
+    "n": 1614,
+    "free": {
+     "default": 17.2,
+     "calibrated": 12.6
+    },
+    "live": {
+     "default": 13.4,
+     "calibrated": 12.3
+    },
+    "params": {
+     "k": 1.1,
+     "dT": 0,
+     "grad": 0,
+     "ddfW": 0.1,
+     "ddfS": 4.875,
+     "twMid": -0.5,
+     "tauCold": 202.5,
+     "rhoCold": 352.5
+    }
+   },
+   {
+    "winter": "2025-26",
+    "n": 1577,
+    "free": {
+     "default": 29.7,
+     "calibrated": 18.6
+    },
+    "live": {
+     "default": 15.6,
+     "calibrated": 14.5
+    },
+    "params": {
+     "k": 0.9,
+     "dT": -0.188,
+     "grad": 0.087,
+     "ddfW": 0.1,
+     "ddfS": 4.75,
+     "twMid": -0.188,
+     "tauCold": 180,
+     "rhoCold": 330
+    }
+   },
+   {
+    "winter": "2026-27",
+    "n": 278,
+    "free": {
+     "default": 3.4,
+     "calibrated": 3
+    },
+    "live": {
+     "default": 2.6,
+     "calibrated": 2.6
+    },
+    "params": {
+     "k": 1.1,
+     "dT": 0,
+     "grad": 0,
+     "ddfW": 0.1,
+     "ddfS": 4.875,
+     "twMid": -0.531,
+     "tauCold": 198.75,
+     "rhoCold": 360
+    }
+   }
+  ],
+  "note": "RMSE (cm) of daily snow depth, each winter predicted with constants fitted on the other winters; \"live\" refits k and dT to the winter itself"
+ },
+ "perStation": [
+  {
+   "winter": "2022-23",
+   "stations": [
+    {
+     "id": "73318400",
+     "name": "Le Corbier",
+     "z": 1585,
+     "n": 106,
+     "rmse": 16,
+     "bias": -12.9
+    },
+    {
+     "id": "73242003",
+     "name": "Saint-Jean-d'Arves",
+     "z": 1573,
+     "n": 218,
+     "rmse": 6.4,
+     "bias": -0.7
+    },
+    {
+     "id": "73280001",
+     "name": "Saint-Sorlin-d'Arves",
+     "z": 1694,
+     "n": 218,
+     "rmse": 7.4,
+     "bias": -2.6
+    },
+    {
+     "id": "73280402",
+     "name": "Saint-Sorlin 2 090 m",
+     "z": 2090,
+     "n": 122,
+     "rmse": 18.9,
+     "bias": -15.7
+    },
+    {
+     "id": "73013002",
+     "name": "Albiez-Montrond",
+     "z": 1633,
+     "n": 14,
+     "rmse": 0,
+     "bias": 0
+    },
+    {
+     "id": "73307400",
+     "name": "Valmeinier",
+     "z": 1788,
+     "n": 131,
+     "rmse": 10.1,
+     "bias": 1.8
+    },
+    {
+     "id": "73257001",
+     "name": "Saint-Martin-de-Belleville",
+     "z": 1443,
+     "n": 218,
+     "rmse": 6.4,
+     "bias": -3.2
+    }
+   ]
+  },
+  {
+   "winter": "2023-24",
+   "stations": [
+    {
+     "id": "73318400",
+     "name": "Le Corbier",
+     "z": 1585,
+     "n": 106,
+     "rmse": 9.6,
+     "bias": -5.7
+    },
+    {
+     "id": "73242003",
+     "name": "Saint-Jean-d'Arves",
+     "z": 1573,
+     "n": 258,
+     "rmse": 7.1,
+     "bias": 3.2
+    },
+    {
+     "id": "73280001",
+     "name": "Saint-Sorlin-d'Arves",
+     "z": 1694,
+     "n": 258,
+     "rmse": 5.9,
+     "bias": 0.7
+    },
+    {
+     "id": "73280402",
+     "name": "Saint-Sorlin 2 090 m",
+     "z": 2090,
+     "n": 115,
+     "rmse": 36,
+     "bias": 33
+    },
+    {
+     "id": "73013002",
+     "name": "Albiez-Montrond",
+     "z": 1633,
+     "n": 258,
+     "rmse": 6.5,
+     "bias": -3.6
+    },
+    {
+     "id": "73307400",
+     "name": "Valmeinier",
+     "z": 1788,
+     "n": 114,
+     "rmse": 13.6,
+     "bias": 7
+    },
+    {
+     "id": "73257005",
+     "name": "Val Thorens",
+     "z": 2277,
+     "n": 258,
+     "rmse": 21.3,
+     "bias": 1.6
+    },
+    {
+     "id": "73257001",
+     "name": "Saint-Martin-de-Belleville",
+     "z": 1443,
+     "n": 258,
+     "rmse": 4.2,
+     "bias": -1.2
+    }
+   ]
+  },
+  {
+   "winter": "2024-25",
+   "stations": [
+    {
+     "id": "73318400",
+     "name": "Le Corbier",
+     "z": 1585,
+     "n": 98,
+     "rmse": 10.1,
+     "bias": -7.7
+    },
+    {
+     "id": "73242003",
+     "name": "Saint-Jean-d'Arves",
+     "z": 1573,
+     "n": 256,
+     "rmse": 15,
+     "bias": 8.5
+    },
+    {
+     "id": "73280001",
+     "name": "Saint-Sorlin-d'Arves",
+     "z": 1694,
+     "n": 257,
+     "rmse": 10.4,
+     "bias": 3.8
+    },
+    {
+     "id": "73280402",
+     "name": "Saint-Sorlin 2 090 m",
+     "z": 2090,
+     "n": 116,
+     "rmse": 12.8,
+     "bias": 4
+    },
+    {
+     "id": "73013002",
+     "name": "Albiez-Montrond",
+     "z": 1633,
+     "n": 257,
+     "rmse": 4.9,
+     "bias": -0.9
+    },
+    {
+     "id": "73307400",
+     "name": "Valmeinier",
+     "z": 1788,
+     "n": 116,
+     "rmse": 21.9,
+     "bias": 11.9
+    },
+    {
+     "id": "73257005",
+     "name": "Val Thorens",
+     "z": 2277,
+     "n": 257,
+     "rmse": 25.1,
+     "bias": -18.9
+    },
+    {
+     "id": "73257001",
+     "name": "Saint-Martin-de-Belleville",
+     "z": 1443,
+     "n": 257,
+     "rmse": 4.3,
+     "bias": 1
+    }
+   ]
+  },
+  {
+   "winter": "2025-26",
+   "stations": [
+    {
+     "id": "73318400",
+     "name": "Le Corbier",
+     "z": 1585,
+     "n": 91,
+     "rmse": 16.1,
+     "bias": -11.5
+    },
+    {
+     "id": "73242003",
+     "name": "Saint-Jean-d'Arves",
+     "z": 1573,
+     "n": 257,
+     "rmse": 13.8,
+     "bias": 6.9
+    },
+    {
+     "id": "73280001",
+     "name": "Saint-Sorlin-d'Arves",
+     "z": 1694,
+     "n": 257,
+     "rmse": 11.4,
+     "bias": -4.8
+    },
+    {
+     "id": "73280402",
+     "name": "Saint-Sorlin 2 090 m",
+     "z": 2090,
+     "n": 106,
+     "rmse": 23.3,
+     "bias": -17.5
+    },
+    {
+     "id": "73013002",
+     "name": "Albiez-Montrond",
+     "z": 1633,
+     "n": 254,
+     "rmse": 6,
+     "bias": -0.7
+    },
+    {
+     "id": "73307400",
+     "name": "Valmeinier",
+     "z": 1788,
+     "n": 102,
+     "rmse": 20.9,
+     "bias": 12.7
+    },
+    {
+     "id": "73257005",
+     "name": "Val Thorens",
+     "z": 2277,
+     "n": 257,
+     "rmse": 16.9,
+     "bias": -1.7
+    },
+    {
+     "id": "73257001",
+     "name": "Saint-Martin-de-Belleville",
+     "z": 1443,
+     "n": 253,
+     "rmse": 8.4,
+     "bias": 2
+    }
+   ]
+  },
+  {
+   "winter": "2026-27",
+   "stations": [
+    {
+     "id": "73242003",
+     "name": "Saint-Jean-d'Arves",
+     "z": 1573,
+     "n": 56,
+     "rmse": 1.4,
+     "bias": 0.3
+    },
+    {
+     "id": "73280001",
+     "name": "Saint-Sorlin-d'Arves",
+     "z": 1694,
+     "n": 56,
+     "rmse": 3.1,
+     "bias": -0.8
+    },
+    {
+     "id": "73013002",
+     "name": "Albiez-Montrond",
+     "z": 1633,
+     "n": 55,
+     "rmse": 1.4,
+     "bias": 0.2
+    },
+    {
+     "id": "73257005",
+     "name": "Val Thorens",
+     "z": 2277,
+     "n": 55,
+     "rmse": 9.1,
+     "bias": 1.8
+    },
+    {
+     "id": "73257001",
+     "name": "Saint-Martin-de-Belleville",
+     "z": 1443,
+     "n": 56,
+     "rmse": 2.3,
+     "bias": -0.5
+    }
+   ]
+  }
+ ]
+}

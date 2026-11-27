@@ -11,12 +11,13 @@ on:
     - cron: '17 5,17 * * *'   # twice a day: archive + Météo-France snow depth
     - cron: '43 11,15 * * *'  # twice a day: Sentinel-2 image (after the late-morning overpass)
     - cron: '41 3 * * 1,4'    # Mondays and Thursdays: model verification
+    - cron: '23 2 * * 0'      # Sundays: snowpack calibration over past winters (Météo-France snow depths)
     - cron: '29 4 2 * *'      # 2nd of each month: buildings, lifts, pistes
     - cron: '11 6 14 * *'     # 14th of each month: C3S multi-system seasonal forecast
   workflow_dispatch:
     inputs:
       what:
-        description: 'What to update (all, climate, snow, verification, vectors, seasonal, bulletin, resort)'
+        description: 'What to update (all, climate, snow, verification, vectors, seasonal, bulletin, resort, snowcal)'
         default: 'all'
         required: true
 
@@ -50,6 +51,7 @@ jobs:
             '17 5,17 * * *') W=climate ;;
             '43 11,15 * * *') W=snow ;;
             '41 3 * * 1,4') W=verification ;;
+            '23 2 * * 0') W=snowcal ;;
             '29 4 2 * *') W=vectors ;;
             '11 6 14 * *') W=seasonal ;;
           esac
@@ -65,6 +67,11 @@ jobs:
         if: steps.plan.outputs.what == 'all' || steps.plan.outputs.what == 'verification'
         continue-on-error: true
         run: node scripts/update-verification.mjs
+
+      - name: Snowpack calibration over past winters (about 2 minutes)
+        if: steps.plan.outputs.what == 'all' || steps.plan.outputs.what == 'snowcal'
+        continue-on-error: true
+        run: node scripts/calibrate-snowpack.mjs
 
       - name: Buildings, lifts, pistes
         if: steps.plan.outputs.what == 'all' || steps.plan.outputs.what == 'vectors'

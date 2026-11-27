@@ -126,6 +126,18 @@ data/                   baked JSON/GeoJSON/images written by the workflow
   fit is unaffected. Limits: no cast shadows from ridges, melt only when air T > 0 °C, no wind redistribution.
   Typical fit error ≈ 6 cm. Test on real data (27 Nov 2026): ≈ 24 cm at 1,550 m, 89 cm at 2,265 m, Val Thorens
   modelled 84 vs 81 cm measured.
+- **Multi-winter calibration** (`scripts/calibrate-snowpack.mjs`, weekly, Sunday 02:23 UTC, `what=snowcal`): fits the
+  snowpack constants `SP.DEFAULTS` (k, dT, grad, ddfW, ddfS, twMid, tauCold, rhoCold) on all winters since autumn
+  2022 (limit of the historical-forecast forcing; 2022 forcing starts 9 Nov, stations with snow already on the ground
+  are left out that winter) against Météo-France daily 06 UTC snow depth (NEIGETOT06, QUOT files Q_73_*_autres-
+  parametres.csv.gz from meteofrance.s3.sbg.io.cloud.ovh.net). Station-winters weigh equally × distance weight.
+  Leave-one-winter-out skill; `data/snowcal.json` has `used: true` only if calibrated beats defaults out of sample.
+  Page and bulletin call `SP.setParams()`; the live k/dT fit is centred on the calibrated k/dT.
+  First run (27 Nov 2026, 5 winters): RMSE free run 21.7 → 16.8 cm, as run live 13.3 → 12.2 cm; 2023-24 free run
+  worse (18.6 → 21.6). Fitted ddfW sits on its lower bound (0.1 mm/°C/day): almost no midwinter melt.
+  Known station disagreement: Le Corbier manual reads ~15–20 cm more than Saint-Jean-d'Arves (same altitude, 4 km).
+  Resort (Lumiplan) depths are NOT used: no measurement time, no documented site. Le Corbier -S- 73318401 (2,198 m)
+  has no data since 2022. 07466 = Saint-Sorlin 73280402 (2,090 m, Choseaux top), added to `snowStations`.
 - **Bulletin**: `B.buildDigest()` → `B.writeBulletin()` rule-based text (next 48 h, days 3–7, snow on the ground,
   ALWAYS ending with the 14-day ensemble trend and its uncertainty). The Action rewrites the draft with GitHub
   Models into `data/bulletin.json`; the page shows it if < 3 h old, else its own rule-based text.
