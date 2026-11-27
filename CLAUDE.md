@@ -210,6 +210,9 @@ hides a place's pill if ever needed. Live webcam card opens in live mode on load
 
 - Radiation melt below 0 °C on sunny slopes; ridge cast shadows (horizon angles from the DEM).
 - Use Le Corbier's manual fresh-snow reports (`HNEIGEF`) in the snowpack fit when the season starts.
+- Sentinel-2 true colour (`s2-rgb.jpg`) is built from the red/green/blue reflectance bands with gamma 0.8 (the TCI
+  'visual' asset clips at ~0.2–0.3 reflectance and gave a uniformly white image on snow); `s2.json.saturated` = share
+  of pixels > 0.95 in every band. Low cloud filling valleys is common in these scenes.
 - Sentinel-2 snow classification (`data/snow/s2-snow.png`) is produced but not shown (it reported 100 % snow with
   34 % cloud — treat with care); it could validate the modelled snow line on clear days.
 - More Sybelles webcams (La Toussuire, Saint-Sorlin, Saint-Jean, Les Bottières, Saint-Colomban) if Skaping or the

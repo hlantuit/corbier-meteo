@@ -99,9 +99,13 @@ def main():
             sw = read_to_grid(a['swir16']['href'], dst_t, w, h)[0]
             gs, go = scale_offset(a['green'], it); ss, so = scale_offset(a['swir16'], it)
             G[m] = (g * gs + go)[m]; S[m] = (sw * ss + so)[m]
+            # True colour from the surface reflectance bands, not the ready-made 'visual' (TCI) product: TCI clips at a
+            # reflectance of about 0.2-0.3, so a snow-covered scene came out uniformly white.
             try:
-                rgb = read_to_grid(a['visual']['href'], dst_t, w, h, Resampling.bilinear, bands=[1, 2, 3])
-                RGB[:, m] = rgb[:, m]
+                for j, band in enumerate(['red', 'green', 'blue']):
+                    v = g if band == 'green' else read_to_grid(a[band]['href'], dst_t, w, h)[0]
+                    bs, bo = scale_offset(a[band], it)
+                    RGB[j][m] = (v * bs + bo)[m]
             except Exception as e:
                 print('rgb failed', it['id'], e)
         ndsi = (G - S) / np.maximum(G + S, 1e-6)
@@ -111,12 +115,16 @@ def main():
         rgba[cloud & valid] = (120, 132, 150, 110)
         os.makedirs(OUT, exist_ok=True)
         Image.fromarray(rgba, 'RGBA').save(os.path.join(OUT, 's2-snow.png'), optimize=True)
-        img = np.clip(np.moveaxis(RGB, 0, -1), 0, 255).astype(np.uint8)
+        # reflectance 0-1 -> display with a gamma of 0.8: snow (0.6-0.95) keeps its texture, forest (0.03-0.1) stays dark
+        refl = np.clip(np.moveaxis(RGB, 0, -1), 0, 1)
+        img = (np.power(refl, 0.8) * 255).astype(np.uint8)
+        sat = float((refl[valid].min(axis=-1) > 0.95).mean())
+        print(key, f'pixels saturated in every band: {sat:.2f}')
         Image.fromarray(img, 'RGB').save(os.path.join(OUT, 's2-rgb.jpg'), quality=82)
         meta = {'date': tiles[0]['properties']['datetime'], 'id': ' + '.join(it['id'] for it in tiles), 'clear': round(float(clear), 3),
                 'snow_fraction': round(float(snow[valid & ~cloud].mean()), 3),
                 'coordinates': [[AOI[0], AOI[3]], [AOI[2], AOI[3]], [AOI[2], AOI[1]], [AOI[0], AOI[1]]],
-                'resolution_m': RES, 'generated': dt.datetime.utcnow().isoformat() + 'Z'}
+                'resolution_m': RES, 'saturated': round(sat, 3), 'generated': dt.datetime.utcnow().isoformat() + 'Z'}
         with open(os.path.join(OUT, 's2.json'), 'w') as f:
             json.dump(meta, f)
         print('wrote', meta)

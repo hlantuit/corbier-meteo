@@ -228,7 +228,7 @@ export function createMap(container, { onReady } = {}) {
       version: 8,
       sources: {
         dem: { type: 'raster-dem', tiles: ['igndem://{z}/{x}/{y}'], tileSize: DEM_SIZE, encoding: 'mapbox', minzoom: 10, maxzoom: 14, bounds },
-        lidar: { type: 'raster', tiles: [lidar], tileSize: 256, minzoom: 12, maxzoom: 17, bounds },
+        lidar: { type: 'raster', tiles: [lidar], tileSize: 256, minzoom: 10, maxzoom: 17, bounds },
         snowgrid: { type: 'raster', tiles: ['snowgrid://{z}/{x}/{y}/0'], tileSize: 256, minzoom: 10, maxzoom: 14, bounds },
         buildings: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
         lifts: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
@@ -241,7 +241,8 @@ export function createMap(container, { onReady } = {}) {
         { id: 'hillshade', type: 'hillshade', source: 'dem', paint: {
           'hillshade-method': 'igor', 'hillshade-exaggeration': 0.75, 'hillshade-illumination-direction': 315, 'hillshade-illumination-anchor': 'map',
           'hillshade-shadow-color': 'rgba(2,5,12,0.85)', 'hillshade-highlight-color': 'rgba(220,235,255,0.42)', 'hillshade-accent-color': 'rgba(0,0,0,0.25)' } },
-        { id: 'lidar', type: 'raster', source: 'lidar', minzoom: 13, layout: { visibility: 'none' }, paint: { 'raster-opacity': 0.55, 'raster-brightness-max': 0.75, 'raster-contrast': 0.25 } },
+        // IGN LiDAR HD shading is served from zoom 10; it was limited to zoom ≥ 13 and so invisible at the opening view
+        { id: 'lidar', type: 'raster', source: 'lidar', layout: { visibility: 'none' }, paint: { 'raster-opacity': 0.75, 'raster-brightness-max': 0.85, 'raster-contrast': 0.3 } },
         // French piste colours, as on the Sybelles map (OSM in France: novice = green, easy = blue,
         // intermediate = red, advanced/expert = black). Black runs get a light casing to stay visible on the dark map.
         { id: 'pistes-casing', type: 'line', source: 'pistes', filter: ['in', ['get', 'd'], ['literal', ['advanced', 'expert']]], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: {
@@ -353,7 +354,8 @@ async function loadSentinel2(map, state) {
     const r = await fetch('data/snow/s2.json', { cache: 'no-cache' }); if (!r.ok) return;
     const meta = await r.json(); const v = encodeURIComponent(meta.generated || '');
     map.addSource('s2rgb', { type: 'image', url: `data/snow/s2-rgb.jpg?v=${v}`, coordinates: meta.coordinates });
-    map.addLayer({ id: 's2-rgb', type: 'raster', source: 's2rgb', layout: { visibility: 'none' }, paint: { 'raster-opacity': 0.9, 'raster-contrast': 0.1, 'raster-fade-duration': 0 } }, 'hillshade');
+    // drawn above the map's hillshade: a snow-covered scene under a low sun already carries its own relief shading
+    map.addLayer({ id: 's2-rgb', type: 'raster', source: 's2rgb', layout: { visibility: 'none' }, paint: { 'raster-opacity': 0.95, 'raster-fade-duration': 0 } }, 'lidar');
     state.s2 = meta;
   } catch (e) { /* no Sentinel-2 product yet */ }
 }
