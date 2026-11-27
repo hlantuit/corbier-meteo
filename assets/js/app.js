@@ -1,5 +1,5 @@
 // Orchestration: fetch everything, compute, and render.
-import { SITE, MODELS, COLORS } from './config.js';
+import { SITE, MODELS, COLORS, CAMS, SKAPING_S3 } from './config.js';
 import { t, fmt, getLang, setLang, applyStatic } from './i18n.js';
 import * as D from './data.js';
 import * as C from './charts.js';
@@ -389,21 +389,80 @@ async function renderSeason() {
 
 // ---------- webcams ----------
 // Skaping's own viewer is embedded (their pages allow framing), so the panoramas stay live and interactive.
-function renderCams() {
-  const cams = [
-    { t: fr() ? 'Le Corbier en direct' : 'Le Corbier live', s: '1 550 m', u: 'https://www.skaping.com/le-corbier/live/' },
-    { t: fr() ? 'Front de neige' : 'Snow front', s: '1 550 m', u: 'https://www.skaping.com/le-corbier/front-de-neige' },
-    { t: 'Pointe du Corbier', s: fr() ? '2 265 m · vue sur les Aiguilles d’Arves' : '2,265 m · view of the Aiguilles d’Arves', u: 'https://www.skaping.com/les-sybelles/pointe-du-corbier' },
-    { t: "L'Ouillon", s: fr() ? 'Sommet des Sybelles' : 'Top of Les Sybelles', u: 'https://www.skaping.com/les-sybelles/ouillon' },
-  ];
-  const grid = $('cam-grid');
-  if (grid.dataset.built) { // keep the live frames on language change, only relabel
-    grid.querySelectorAll('.cam').forEach((el, k) => { el.querySelector('.t').textContent = cams[k].t; el.querySelector('.s').textContent = cams[k].s; el.querySelector('.go').textContent = fr() ? 'Ouvrir ↗' : 'Open ↗'; });
-    return;
+// Webcams: the latest still of each camera (found from Skaping's capture schedule), refreshed every
+// 10 minutes; the live view opens in the card itself.
+const loadImg = src => new Promise((res, rej) => { const im = new Image(); im.referrerPolicy = 'no-referrer'; im.onload = () => res(im); im.onerror = rej; im.src = src; });
+const parisParts = ms => { const p = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(new Date(ms)); const g = k => p.find(x => x.type === k).value; return { y: g('year'), m: g('month'), d: g('day'), H: g('hour'), M: g('minute') }; };
+async function latestStill(cam, size) {
+  if (cam.thumb) { const im = await loadImg(`${cam.thumb}?t=${Math.floor(Date.now() / 60e3)}`); return { src: im.src, time: Date.now() }; }
+  // newest capture slots first, over the last 4 hours
+  const t0 = Math.floor(Date.now() / 60e3) * 60e3; const slots = [];
+  for (let k = 0; k <= 240 && slots.length < 12; k++) {
+    const t = t0 - k * 60e3; const q = parisParts(t);
+    if ((+q.M - cam.offset) % cam.step === 0) slots.push({ t, url: `${SKAPING_S3}${cam.path}/${q.y}/${q.m}/${q.d}/${size}/${q.H}-${q.M}.jpg` });
   }
-  grid.innerHTML = cams.map(c => `<figure class="cam"><iframe src="${c.u}" title="${c.t}" loading="lazy" allow="fullscreen" referrerpolicy="no-referrer-when-downgrade"></iframe>
-    <figcaption><span><span class="t">${c.t}</span><span class="s">${c.s}</span></span><a class="go" href="${c.u}" target="_blank" rel="noopener">${fr() ? 'Ouvrir ↗' : 'Open ↗'}</a></figcaption></figure>`).join('');
-  grid.dataset.built = '1';
+  for (const s of slots) { try { await loadImg(s.url); return { src: s.url, time: s.t }; } catch (e) { /* not uploaded yet: try the previous slot */ } }
+  throw new Error('no recent image');
+}
+const camLabel = c => ({ t: fr() ? c.fr : c.en, s: fr() ? c.subFr : c.subEn });
+const hhmm = ms => new Intl.DateTimeFormat(fr() ? 'fr-FR' : 'en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' }).format(new Date(ms));
+function camButtons(c, live) {
+  return `<button type="button" class="go live-btn" data-live="${live ? 1 : 0}">${live ? (fr() ? 'Image fixe' : 'Still') : (fr() ? '● Direct' : '● Live')}</button><a class="go" href="${c.page}" target="_blank" rel="noopener">Skaping ↗</a>`;
+}
+function renderCams() {
+  const grid = $('cam-grid');
+  if (!grid.dataset.built) {
+    grid.innerHTML = CAMS.map(c => `<figure class="cam" data-id="${c.id}">
+      <div class="still${c.thumb ? '' : ' pano'}"><div class="ph">${fr() ? 'Chargement…' : 'Loading…'}</div></div>
+      <figcaption><span><span class="t"></span><span class="s"></span><span class="when"></span></span><span class="acts"></span></figcaption></figure>`).join('');
+    grid.dataset.built = '1';
+    refreshStills();
+    setInterval(() => { if (!document.hidden) refreshStills(); }, 10 * 60e3);
+  }
+  CAMS.forEach(c => {
+    const el = grid.querySelector(`.cam[data-id="${c.id}"]`); const L = camLabel(c);
+    el.querySelector('.t').textContent = L.t; el.querySelector('.s').textContent = L.s;
+    const live = !!el.querySelector('iframe');
+    el.querySelector('.acts').innerHTML = camButtons(c, live);
+    el.querySelector('.live-btn').onclick = () => toggleLive(c, el);
+    if (el.dataset.time) el.querySelector('.when').textContent = live ? (fr() ? 'en direct' : 'live') : `${fr() ? 'image de' : 'image at'} ${hhmm(+el.dataset.time)}`;
+  });
+}
+function toggleLive(c, el) {
+  const fr0 = el.querySelector('iframe');
+  if (fr0) { fr0.remove(); el.querySelector('.still').hidden = false; }
+  else {
+    el.querySelector('.still').hidden = true;
+    el.insertAdjacentHTML('afterbegin', `<iframe src="${c.page}" title="${camLabel(c).t}" allow="fullscreen; autoplay" referrerpolicy="no-referrer-when-downgrade"></iframe>`);
+  }
+  renderCams();
+}
+async function refreshStills() {
+  await Promise.all(CAMS.map(async c => {
+    const el = $('cam-grid').querySelector(`.cam[data-id="${c.id}"]`); const box = el.querySelector('.still');
+    try {
+      const r = await latestStill(c, window.innerWidth < 700 ? 'mini' : 'small');
+      el.dataset.time = r.time;
+      if (c.thumb) box.innerHTML = `<img src="${r.src}" alt="${camLabel(c).t}" referrerpolicy="no-referrer"><span class="play" aria-hidden="true"><svg width="18" height="20" viewBox="0 0 10 12"><path d="M0 0l10 6-10 6z" fill="currentColor"/></svg></span>`;
+      else {
+        const keep = box.querySelector('.scroller'); const left = keep ? keep.scrollLeft : null;
+        box.innerHTML = `<div class="scroller"><img src="${r.src}" alt="${camLabel(c).t}" referrerpolicy="no-referrer" draggable="false"></div><span class="hint">${fr() ? '⟷ faites glisser' : '⟷ drag'}</span>`;
+        const sc = box.querySelector('.scroller'); const img = sc.querySelector('img');
+        const center = () => { sc.scrollLeft = left !== null ? left : (sc.scrollWidth - sc.clientWidth) / 2; };
+        if (img.complete) center(); else img.onload = center;
+        // drag to pan the panorama
+        let x0 = null, s0 = 0;
+        sc.onpointerdown = e => { x0 = e.clientX; s0 = sc.scrollLeft; sc.setPointerCapture(e.pointerId); sc.classList.add('drag'); };
+        sc.onpointermove = e => { if (x0 !== null) sc.scrollLeft = s0 - (e.clientX - x0); };
+        sc.onpointerup = sc.onpointercancel = () => { x0 = null; sc.classList.remove('drag'); };
+        sc.ondblclick = () => window.open(r.src.replace(/\/(mini|small)\//, '/large/'), '_blank', 'noopener');
+      }
+      if (c.thumb) box.querySelector('.play').onclick = () => toggleLive(c, el);
+    } catch (e) {
+      box.innerHTML = `<div class="ph">${fr() ? 'Pas d’image récente — ouvrez le direct' : 'No recent image — open the live view'}</div>`;
+    }
+  }));
+  renderCams();
 }
 
 // ---------- archive ----------

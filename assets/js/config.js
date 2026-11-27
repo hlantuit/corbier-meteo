@@ -100,6 +100,18 @@ export const COLORS = {
   consensus: '#ffffff',
 };
 
+// Skaping webcams. Panoramic cameras store a still every `step` minutes (Paris time, at minute `offset`)
+// at skaping.s3…/<path>/<YYYY>/<MM>/<DD>/<size>/<HH>-<mm>.jpg (sizes: thumb 180 px, mini 360, small 480, large 720 high);
+// the live camera publishes a continuously refreshed thumbnail of its video stream.
+export const CAMS = [
+  { id: 'live', page: 'https://www.skaping.com/le-corbier/live', fr: 'Le Corbier en direct', en: 'Le Corbier live', subFr: 'Front de neige · 1 550 m', subEn: 'Snow front · 1,550 m',
+    thumb: 'https://skaping.quanteec.com/contents/encodings/live/cf855356-9237-4153-746c-7561-6665-64-8b60-d9205323f770d/thumbnail.jpg' },
+  { id: 'front', page: 'https://www.skaping.com/le-corbier/front-de-neige', fr: 'Front de neige, panorama', en: 'Snow front, panorama', subFr: 'Le Corbier · 1 550 m', subEn: 'Le Corbier · 1,550 m', path: 'le-corbier/front-de-neige/panoramique', step: 30, offset: 1 },
+  { id: 'pointe', page: 'https://www.skaping.com/les-sybelles/pointe-du-corbier', fr: 'Pointe du Corbier', en: 'Pointe du Corbier', subFr: '2 265 m · vue sur les Aiguilles d’Arves', subEn: '2,265 m · view of the Aiguilles d’Arves', path: 'les-sybelles/pointe-du-corbier', step: 10, offset: 0 },
+  { id: 'ouillon', page: 'https://www.skaping.com/les-sybelles/ouillon', fr: 'L’Ouillon', en: 'L’Ouillon', subFr: '2 426 m · sommet des Sybelles', subEn: '2,426 m · top of Les Sybelles', path: 'les-sybelles/ouillon', step: 10, offset: 0 },
+];
+export const SKAPING_S3 = 'https://skaping.s3.gra.io.cloud.ovh.net/';
+
 export const API = {
   forecast: 'https://api.open-meteo.com/v1/forecast',
   ensemble: 'https://ensemble-api.open-meteo.com/v1/ensemble',

@@ -25,6 +25,7 @@ await page.route('**/*', async route => {
   if (url.includes('data.geopf.fr/wms-r')) return route.fulfill({ status: 200, contentType: 'image/geotiff', headers: { 'access-control-allow-origin': '*' }, body: F.geotiff(url) });
   if (url.includes('data.geopf.fr/wfs')) return json(F.wfs(url));
   if (url.includes('overpass-api.de')) return json(F.overpass());
+  if (url.includes('skaping.s3') || url.includes('quanteec')) return route.fulfill({ status: 200, contentType: 'image/jpeg', body: fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), url.includes('quanteec') ? 'cam-live.jpg' : 'cam-pano.jpg')) });
   if (url.includes('data.geopf.fr/wmts') || url.includes('gibs.earthdata')) return route.fulfill({ status: 200, contentType: 'image/png', headers: { 'access-control-allow-origin': '*' }, body: F.transparentPng });
   misses.add(url.slice(0, 120)); return route.fulfill({ status: 404, body: '' });
 });
