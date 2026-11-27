@@ -53,14 +53,16 @@ const prompt = lang => lang === 'fr'
 async function ask(model, lang) {
   const r = await fetch('https://models.github.ai/inference/chat/completions', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.GITHUB_TOKEN}` },
+    headers: { 'Content-Type': 'application/json', Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', Authorization: `Bearer ${process.env.GITHUB_TOKEN}` },
     body: JSON.stringify({ model, temperature: 0.4, max_tokens: 450, messages: [
       { role: 'system', content: lang === 'fr' ? 'Tu es prévisionniste neige en montagne. Tu es précis, sobre et tu ne t’écartes jamais des données fournies.' : 'You are a mountain snow forecaster. You are precise, plain-spoken and never stray from the data you are given.' },
       { role: 'user', content: prompt(lang) },
     ] }),
   });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(`${r.status} ${JSON.stringify(j).slice(0, 200)}`);
+  const body = await r.text();
+  const head = `HTTP ${r.status} ${r.headers.get('content-type')} ${body.length} bytes: ${body.slice(0, 300).replace(/\s+/g, ' ')}`;
+  if (!r.ok) throw new Error(head);
+  let j; try { j = JSON.parse(body); } catch (e) { throw new Error('not JSON — ' + head); }
   let text = (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content || '').trim();
   text = text.replace(/^["«“\s]+|["»”\s]+$/g, '').replace(/\*\*/g, '').replace(/\s*\n+\s*/g, ' ');
   if (text.length < 150 || text.length > 1400) {

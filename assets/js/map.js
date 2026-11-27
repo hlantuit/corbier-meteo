@@ -242,8 +242,12 @@ export function createMap(container, { onReady } = {}) {
           'hillshade-method': 'igor', 'hillshade-exaggeration': 0.75, 'hillshade-illumination-direction': 315, 'hillshade-illumination-anchor': 'map',
           'hillshade-shadow-color': 'rgba(2,5,12,0.85)', 'hillshade-highlight-color': 'rgba(220,235,255,0.42)', 'hillshade-accent-color': 'rgba(0,0,0,0.25)' } },
         { id: 'lidar', type: 'raster', source: 'lidar', minzoom: 13, layout: { visibility: 'none' }, paint: { 'raster-opacity': 0.55, 'raster-brightness-max': 0.75, 'raster-contrast': 0.25 } },
+        // French piste colours, as on the Sybelles map (OSM in France: novice = green, easy = blue,
+        // intermediate = red, advanced/expert = black). Black runs get a light casing to stay visible on the dark map.
+        { id: 'pistes-casing', type: 'line', source: 'pistes', filter: ['in', ['get', 'd'], ['literal', ['advanced', 'expert']]], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: {
+          'line-color': 'rgba(235,242,255,.75)', 'line-width': ['interpolate', ['linear'], ['zoom'], 12, 2.4, 15, 4, 17, 5.8] } },
         { id: 'pistes', type: 'line', source: 'pistes', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: {
-          'line-color': ['match', ['get', 'd'], 'novice', '#3ddc97', 'easy', '#3ddc97', 'intermediate', '#4aa3ff', 'advanced', '#ff5d5d', 'expert', '#9aa7b8', 'freeride', '#ffb547', '#4aa3ff'],
+          'line-color': ['match', ['get', 'd'], 'novice', '#2fc46b', 'easy', '#3d8bff', 'intermediate', '#ff4b4b', 'advanced', '#0a0a0a', 'expert', '#0a0a0a', 'freeride', '#ffb547', '#3d8bff'],
           'line-width': ['interpolate', ['linear'], ['zoom'], 12, 1, 15, 2.2, 17, 3.5], 'line-opacity': 0.85 } },
         { id: 'lifts-casing', type: 'line', source: 'lifts', paint: { 'line-color': 'rgba(3,6,12,.85)', 'line-width': ['interpolate', ['linear'], ['zoom'], 12, 2.5, 16, 5] } },
         { id: 'lifts', type: 'line', source: 'lifts', paint: { 'line-color': '#ffffff', 'line-width': ['interpolate', ['linear'], ['zoom'], 12, 1, 16, 2] } },
@@ -321,7 +325,7 @@ export function createMap(container, { onReady } = {}) {
     },
     get s2() { return state.s2; },
     setVisible(layer, on) {
-      const ids = { buildings: ['buildings'], lifts: ['lifts', 'lifts-casing'], pistes: ['pistes'], lidar: ['lidar'] }[layer] || [layer];
+      const ids = { buildings: ['buildings'], lifts: ['lifts', 'lifts-casing'], pistes: ['pistes', 'pistes-casing'], lidar: ['lidar'] }[layer] || [layer];
       ids.forEach(id => map.getLayer(id) && map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none'));
     },
     set3D(on) {
