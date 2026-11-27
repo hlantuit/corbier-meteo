@@ -63,7 +63,10 @@ async function ask(model, lang) {
   if (!r.ok) throw new Error(`${r.status} ${JSON.stringify(j).slice(0, 200)}`);
   let text = (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content || '').trim();
   text = text.replace(/^["«“\s]+|["»”\s]+$/g, '').replace(/\*\*/g, '').replace(/\s*\n+\s*/g, ' ');
-  if (text.length < 150 || text.length > 1400) throw new Error('unexpected length ' + text.length);
+  if (text.length < 150 || text.length > 1400) {
+    const c = j.choices && j.choices[0];
+    throw new Error(`unexpected length ${text.length}; finish_reason=${c && c.finish_reason}; raw=${JSON.stringify(j).slice(0, 600)}`);
+  }
   return text;
 }
 
