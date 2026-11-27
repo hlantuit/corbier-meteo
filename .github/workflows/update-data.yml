@@ -1,24 +1,28 @@
 name: Update data
 
-# All live forecasts are fetched by the visitor's browser. This workflow only refreshes the
-# slower products that are baked into data/ (verification, archive, map vectors, satellite snow,
-# multi-system seasonal forecast) and commits them; GitHub Pages then republishes the site.
+# All live forecasts are fetched by the visitor's browser (and again every 30 minutes while the page
+# stays open). This workflow refreshes what is baked into data/ (AI bulletin, archive, satellite image,
+# verification, map vectors, multi-system seasonal forecast) and commits it; GitHub Pages then
+# republishes the site. Scheduled runs are free for a public repository; the hourly commits also keep
+# GitHub from pausing the schedule after 60 days without activity.
 on:
   schedule:
-    - cron: '17 5 * * *'    # daily 05:17 UTC: archive + Météo-France snow depth
-    - cron: '43 11 * * *'   # daily 11:43 UTC: Sentinel-2 snow map (after the morning overpass)
-    - cron: '41 3 * * 1'    # Mondays 03:41 UTC: model verification
-    - cron: '29 4 2 * *'    # 2nd of each month: buildings, lifts, pistes
-    - cron: '11 6 14 * *'   # 14th of each month: C3S multi-system seasonal forecast
+    - cron: '7 * * * *'       # hourly: AI-written bulletin (GitHub Models)
+    - cron: '17 5,17 * * *'   # twice a day: archive + Météo-France snow depth
+    - cron: '43 11,15 * * *'  # twice a day: Sentinel-2 image (after the late-morning overpass)
+    - cron: '41 3 * * 1,4'    # Mondays and Thursdays: model verification
+    - cron: '29 4 2 * *'      # 2nd of each month: buildings, lifts, pistes
+    - cron: '11 6 14 * *'     # 14th of each month: C3S multi-system seasonal forecast
   workflow_dispatch:
     inputs:
       what:
-        description: 'What to update (all, climate, snow, verification, vectors, seasonal)'
+        description: 'What to update (all, climate, snow, verification, vectors, seasonal, bulletin)'
         default: 'all'
         required: true
 
 permissions:
   contents: write
+  models: read   # GitHub Models, for the AI-written bulletin
 
 concurrency:
   group: update-data
@@ -43,9 +47,10 @@ jobs:
           W="${{ github.event.inputs.what }}"
           S="${{ github.event.schedule }}"
           [ -z "$W" ] && case "$S" in
-            '17 5 * * *') W=climate ;;
-            '43 11 * * *') W=snow ;;
-            '41 3 * * 1') W=verification ;;
+            '7 * * * *') W=bulletin ;;
+            '17 5,17 * * *') W=climate ;;
+            '43 11,15 * * *') W=snow ;;
+            '41 3 * * 1,4') W=verification ;;
             '29 4 2 * *') W=vectors ;;
             '11 6 14 * *') W=seasonal ;;
           esac
@@ -82,6 +87,13 @@ jobs:
         run: |
           pip install --quiet "cdsapi>=0.7.4" xarray netCDF4
           python scripts/update_seasonal_c3s.py
+
+      - name: AI-written bulletin (GitHub Models)
+        if: steps.plan.outputs.what == 'all' || steps.plan.outputs.what == 'bulletin'
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/update-bulletin.mjs
 
       - name: Commit
         run: |
