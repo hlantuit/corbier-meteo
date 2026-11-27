@@ -133,9 +133,13 @@ data/                   baked JSON/GeoJSON/images written by the workflow
   parametres.csv.gz from meteofrance.s3.sbg.io.cloud.ovh.net). Station-winters weigh equally × distance weight.
   Leave-one-winter-out skill; `data/snowcal.json` has `used: true` only if calibrated beats defaults out of sample.
   Page and bulletin call `SP.setParams()`; the live k/dT fit is centred on the calibrated k/dT.
-  First run (27 Nov 2026, 5 winters): RMSE free run 21.7 → 16.8 cm, as run live 13.3 → 12.2 cm; 2023-24 free run
-  worse (18.6 → 21.6). Fitted ddfW sits on its lower bound (0.1 mm/°C/day): almost no midwinter melt.
-  Known station disagreement: Le Corbier manual reads ~15–20 cm more than Saint-Jean-d'Arves (same altitude, 4 km).
+  Stations are NOT flat: each runs with its own slope/aspect (IGN RGE ALTI ±50 m, `slope`/`aspect` in
+  `SITE.snowStations`, `SP.siteMeltScale`) in the calibration and in the live fit/nudging; Saint-Jean-d'Arves is on a
+  21° SW slope (owner's hint), which explains part of its deficit vs Le Corbier. `FLAT=1 DRY=1` reruns flat for
+  comparison. Held-out RMSE (27 Nov 2026, 5 winters), as run live: flat default 13.3 → flat calibrated 12.2 → own
+  slope default 11.9 → own slope calibrated 11.6 cm; free run 21.7 → 16.4 cm. ddfW sits on its lower bound
+  (0.1 mm/°C/day): almost no midwinter melt. Le Corbier − Saint-Jean residual gap ≈ 9–16 cm (was 17–20);
+  Le Corbier's listed position is rounded (~180 m; DEM 1,566 vs 1,585 m listed), so its slope is uncertain.
   Resort (Lumiplan) depths are NOT used: no measurement time, no documented site. Le Corbier -S- 73318401 (2,198 m)
   has no data since 2022. 07466 = Saint-Sorlin 73280402 (2,090 m, Choseaux top), added to `snowStations`.
 - **Bulletin**: `B.buildDigest()` → `B.writeBulletin()` rule-based text (next 48 h, days 3–7, snow on the ground,

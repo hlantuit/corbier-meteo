@@ -22,7 +22,8 @@ const log = (...a) => console.log('[snowcal]', ...a);
 const HOUR = 3600e3, DAY = 24 * HOUR;
 const QUOT = 'https://meteofrance.s3.sbg.io.cloud.ovh.net/data/synchro_ftp/BASE/QUOT/';
 const FILES = ['Q_73_previous-1950-2024_autres-parametres.csv.gz', 'Q_73_latest-2025-2026_autres-parametres.csv.gz'];
-const FIRST_WINTER = 2022; // forcing (ICON + Météo-France analyses) starts in autumn 2022
+const FIRST_WINTER = 2022;
+const FLAT = !!process.env.FLAT; // FLAT=1: treat every station as flat ground (for comparison) // forcing (ICON + Météo-France analyses) starts in autumn 2022
 
 // ---------- stations ----------
 const STATIONS = SITE.snowStations.map(s => ({ ...s, km: Math.hypot((s.lat - SITE.lat) * 111.2, (s.lon - SITE.lon) * 78.5) }));
@@ -81,7 +82,10 @@ async function loadWinters(obs) {
     const groups = STATIONS.filter(s => !skip.has(s.id)).map(s => {
       const m = new Map(); let n = 0;
       for (const r of o) if (r.station === s.id) { const i = Math.round((r.time - hist.time[0]) / HOUR); if (i >= 0 && i < hist.time.length) { m.set(i, r.hs); n++; } }
-      return { s, m, n, last: n ? Math.max(...m.keys()) : -1 };
+      // melt scale of the site's own slope, precomputed per forcing hour (stations are not on flat ground)
+      const f = FLAT ? null : SP.siteMeltScale(s.slope || 0, s.aspect);
+      const msArr = f ? Float32Array.from(hist.time, f) : null; const t0 = hist.time[0];
+      return { s, m, n, last: n ? Math.max(...m.keys()) : -1, ms: msArr ? t => msArr[Math.round((t - t0) / HOUR)] : null };
     }).filter(g => g.n >= 10);
     out.push({ label: `${y}-${String(y + 1).slice(2)}`, y, hist, groups, nObs: groups.reduce((a, g) => a + g.n, 0) });
     log(`winter ${y}-${y + 1}: ${groups.length} stations, ${out[out.length - 1].nObs} observations, ${hist.time.length} forcing hours`);
@@ -102,7 +106,7 @@ function scoreWinter(W, par, detail = false) {
   for (const g of W.groups) {
     const ph = SP.pastPhase(W.hist, g.s.elev, par.dT);
     const wObs = g.s.wd / g.n; let gse = 0, gb = 0;
-    SP.runPast(W.hist, ph, par.k, W.hist.time[g.last], (i, s) => { const o = g.m.get(i); if (o !== undefined) { const e = s.h - o; gse += e * e; gb += e; } });
+    SP.runPast(W.hist, ph, par.k, W.hist.time[g.last], (i, s) => { const o = g.m.get(i); if (o !== undefined) { const e = s.h - o; gse += e * e; gb += e; } }, g.ms);
     se += wObs * gse; sw += wObs * g.n;
     if (st) st.push({ id: g.s.id, name: g.s.name, z: g.s.elev, n: g.n, rmse: Math.sqrt(gse / g.n), bias: gb / g.n });
   }
@@ -172,13 +176,14 @@ const out = {
   verdict: better ? 'calibrated constants beat the hand-set ones out of sample' : 'calibrated constants did not beat the hand-set ones out of sample: defaults kept',
   params: Object.fromEntries(KEYS.map(k => [k, +final[k].toFixed(3)])),
   defaults,
+  stationSlopes: !FLAT,
   forcing: 'Open-Meteo historical forecasts at Le Corbier 1,550 m (mean of icon_seamless, meteofrance_seamless, ecmwf_ifs025)',
   observations: 'Météo-France daily snow depth at 06 UTC (NEIGETOT06), Savoie daily climatological files, data.gouv.fr',
-  stations: STATIONS.map(s => ({ id: s.id, name: s.name, z: s.elev, km: +s.km.toFixed(1), weight: +s.wd.toFixed(2) })),
+  stations: STATIONS.map(s => ({ id: s.id, name: s.name, z: s.elev, slope: s.slope || 0, aspect: s.aspect ?? null, km: +s.km.toFixed(1), weight: +s.wd.toFixed(2) })),
   winters: winters.map(W => ({ winter: W.label, observations: W.nObs, stations: W.groups.length })),
   skill: { rmseCm: verdict, heldOut: lowo, note: 'RMSE (cm) of daily snow depth, each winter predicted with constants fitted on the other winters; "live" refits k and dT to the winter itself' },
   perStation,
 };
-fs.writeFileSync('data/snowcal.json', JSON.stringify(out, null, 1));
+if (!process.env.DRY) fs.writeFileSync('data/snowcal.json', JSON.stringify(out, null, 1));
 log('verdict:', out.verdict, JSON.stringify(verdict));
 log('params:', JSON.stringify(out.params));

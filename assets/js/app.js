@@ -520,10 +520,10 @@ function calText(lang) {
   const c = S.cal; if (!c || !c.skill) return '';
   const w = c.winters.map(x => x.winter); const r = c.skill.rmseCm;
   if (lang === 'fr') return c.used
-    ? ` Les constantes du modèle (fonte, seuil pluie-neige, tassement…) ont été calées sur ${w.length} hivers (${w[0]} à ${w[w.length - 1]}) de mesures Météo-France ; testé sur chaque hiver avec des constantes calées sur les autres, l’écart moyen passe de ${fmt(r.live.default, 1)} à ${fmt(r.live.calibrated, 1)} cm.`
+    ? ` Chaque station est simulée sur sa propre pente (Saint-Jean-d’Arves est sur un versant sud-ouest de 21°), d’après le relief IGN. Les constantes du modèle (fonte, seuil pluie-neige, tassement…) ont été calées sur ${w.length} hivers (${w[0]} à ${w[w.length - 1]}) de mesures Météo-France ; testé sur chaque hiver avec des constantes calées sur les autres, l’écart moyen passe de ${fmt(r.live.default, 1)} à ${fmt(r.live.calibrated, 1)} cm.`
     : ` Un calage des constantes sur ${w.length} hivers de mesures Météo-France n’a pas fait mieux que les valeurs par défaut, qui sont conservées.`;
   return c.used
-    ? ` The model constants (melt, rain–snow threshold, settling…) were calibrated on ${w.length} winters (${w[0]} to ${w[w.length - 1]}) of Météo-France measurements; tested on each winter with constants fitted on the others, the mean error goes from ${fmt(r.live.default, 1)} to ${fmt(r.live.calibrated, 1)} cm.`
+    ? ` Each station is simulated on its own slope (Saint-Jean-d’Arves sits on a 21° south-west slope), from the IGN terrain. The model constants (melt, rain–snow threshold, settling…) were calibrated on ${w.length} winters (${w[0]} to ${w[w.length - 1]}) of Météo-France measurements; tested on each winter with constants fitted on the others, the mean error goes from ${fmt(r.live.default, 1)} to ${fmt(r.live.calibrated, 1)} cm.`
     : ` Calibrating the constants on ${w.length} winters of Météo-France measurements did not beat the default values, which are kept.`;
 }
 function renderMethods() {

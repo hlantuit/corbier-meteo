@@ -110,11 +110,14 @@ const sunCache = new Map();
 export function sunRatio(ms, slope, aspect) {
   if (!slope) return 1;
   const y = new Date(ms).getUTCFullYear(); const doy = Math.floor((ms - Date.UTC(y, 0, 1)) / DAY) + 1;
-  const key = doy * 1000 + slope * 10 + aspect / 45;
+  const key = `${doy}/${slope}/${aspect}`;
   if (!sunCache.has(key)) sunCache.set(key, dailySun(doy, slope, aspect) / dailySun(doy, 0, 0));
   return sunCache.get(key);
 }
 const meltScaleFor = c => (c.s ? ms => 0.4 + 0.6 * sunRatio(ms, c.s, c.a) : null);
+// Melt scale of a measuring site on its own slope (stations are not on flat ground: Saint-Jean-d'Arves sits on a 21°
+// south-west slope). Slope rounded to 1°, aspect to 5° so the daily sunshine cache stays small.
+export const siteMeltScale = (slope, aspect) => (slope >= 3 && Number.isFinite(aspect) ? meltScaleFor({ s: Math.round(slope), a: Math.round(aspect / 5) * 5 % 360 }) : null);
 
 // Measured snow depths → weighted observations. Weight falls with distance (12 km scale) and age (10 days);
 // Le Corbier's manual reports count 1.5×; the hourly series of the last days counts ¼ per value.
@@ -122,7 +125,7 @@ export function snowObservations(daily, hourlyStJean, now) {
   const meta = Object.fromEntries(SITE.snowStations.map(s => [s.id, { ...s, wd: Math.exp(-Math.hypot((s.lat - SITE.lat) * 111.2, (s.lon - SITE.lon) * 78.5) / 12) }]));
   const mk = (id, time, hs, f) => {
     const m = meta[id]; if (!m || hs === null || hs === undefined) return null;
-    return { station: id, name: m.name, time, z: m.elev, hs, wd: m.wd, w: m.wd * (m.manual ? 1.5 : 1) * f * (0.3 + Math.exp(-(now - time) / (10 * DAY))) };
+    return { station: id, name: m.name, time, z: m.elev, slope: m.slope || 0, aspect: m.aspect, hs, wd: m.wd, w: m.wd * (m.manual ? 1.5 : 1) * f * (0.3 + Math.exp(-(now - time) / (10 * DAY))) };
   };
   const out = daily.map(o => mk(o.station, o.time, o.hs, 1));
   (hourlyStJean || []).forEach((o, i) => { if (i % 3 === 0) out.push(mk('73242003', o.time, o.hs, 0.25)); });
@@ -134,10 +137,10 @@ export function snowObservations(daily, hourlyStJean, now) {
 function fit(hist, obs, until) {
   const use = obs.filter(o => o.time >= hist.time[0] && o.time <= until);
   if (use.length < 3) return { k: P.k, dT: P.dT, rmse: null, n: use.length };
-  const groups = [...new Set(use.map(o => o.z))].map(z => {
-    const m = new Map();
-    use.filter(o => o.z === z).forEach(o => { const i = Math.round((o.time - hist.time[0]) / HOUR); if (!m.has(i)) m.set(i, []); m.get(i).push(o); });
-    return { z, m, last: Math.max(...m.keys()) };
+  const groups = [...new Set(use.map(o => o.station))].map(id => {
+    const m = new Map(); const mine = use.filter(o => o.station === id);
+    mine.forEach(o => { const i = Math.round((o.time - hist.time[0]) / HOUR); if (!m.has(i)) m.set(i, []); m.get(i).push(o); });
+    return { z: mine[0].z, ms: siteMeltScale(mine[0].slope, mine[0].aspect), m, last: Math.max(...m.keys()) };
   });
   let best = null; const phaseCache = new Map();
   const tryOne = (k, dT) => {
@@ -148,7 +151,7 @@ function fit(hist, obs, until) {
     let se = 0, sw = 0;
     groups.forEach((g, j) => runPast(hist, phases[j], k, hist.time[g.last], (i, st) => {
       const a = g.m.get(i); if (a) for (const o of a) { se += o.w * (st.h - o.hs) ** 2; sw += o.w; }
-    }));
+    }, g.ms));
     const mse = sw ? se / sw : 0;
     // weak priors centred on the multi-winter calibration (P.k, P.dT; 1 and 0 before any calibration)
     const cost = mse + 25 * ((k - P.k) / 0.5) ** 2 + 25 * ((dT - P.dT) / 1.5) ** 2;
@@ -168,7 +171,8 @@ function nudgeFactors(hist, obs, par, until) {
   for (const id of [...new Set(obs.map(o => o.station))]) {
     const o = obs.filter(x => x.station === id && x.time <= until && x.time >= lastT - 48 * HOUR).sort((a, b) => b.time - a.time)[0];
     if (!o) continue;
-    const hm = runPast(hist, pastPhase(hist, o.z, par.dT), par.k, o.time).h;
+    // modelled depth on the station's own slope; the log-ratio then scales the flat-ground bands
+    const hm = runPast(hist, pastPhase(hist, o.z, par.dT), par.k, o.time, null, siteMeltScale(o.slope, o.aspect)).h;
     let rho = null;
     if (hm >= 2 && o.hs >= 2) rho = Math.log(o.hs / hm);
     else if (hm >= 3 && o.hs < 1) rho = Math.log(0.5);
