@@ -7,7 +7,7 @@ name: Update data
 # GitHub from pausing the schedule after 60 days without activity.
 on:
   schedule:
-    - cron: '7 * * * *'       # hourly: resort report + AI-written bulletin
+    - cron: '13 * * * *'      # hourly: resort report + AI-written bulletin (off the busy top of the hour)
     - cron: '17 5,17 * * *'   # twice a day: archive + Météo-France snow depth
     - cron: '43 11,15 * * *'  # twice a day: Sentinel-2 image (after the late-morning overpass)
     - cron: '41 3 * * 1,4'    # Mondays and Thursdays: model verification
@@ -47,7 +47,7 @@ jobs:
           W="${{ github.event.inputs.what }}"
           S="${{ github.event.schedule }}"
           [ -z "$W" ] && case "$S" in
-            '7 * * * *') W=bulletin ;;
+            '13 * * * *') W=bulletin ;;
             '17 5,17 * * *') W=climate ;;
             '43 11,15 * * *') W=snow ;;
             '41 3 * * 1,4') W=verification ;;

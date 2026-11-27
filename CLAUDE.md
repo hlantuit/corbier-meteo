@@ -177,7 +177,7 @@ still if the schedule ever changes.
 ## Workflow (`.github/workflows/update-data.yml`)
 
 Schedule (UTC):
-hourly :07 bulletin · 05:17 & 17:17 climate (ERA5 archive + station seasons) · 11:43 & 15:43 Sentinel-2 ·
+hourly :13 bulletin + resort · 05:17 & 17:17 climate (ERA5 archive + station seasons) · 11:43 & 15:43 Sentinel-2 ·
 Mon & Thu 03:41 verification (~6 min) · 2nd of month vectors · 14th of month C3S seasonal.
 `workflow_dispatch` input `what` = all | climate | snow | verification | vectors | seasonal | bulletin.
 Permissions: `contents: write`. Steps are `continue-on-error`; final step commits `data/` and
