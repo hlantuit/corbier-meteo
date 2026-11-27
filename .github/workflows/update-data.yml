@@ -7,7 +7,7 @@ name: Update data
 # GitHub from pausing the schedule after 60 days without activity.
 on:
   schedule:
-    - cron: '7 * * * *'       # hourly: AI-written bulletin (GitHub Models)
+    - cron: '7 * * * *'       # hourly: resort report + AI-written bulletin (GitHub Models)
     - cron: '17 5,17 * * *'   # twice a day: archive + Météo-France snow depth
     - cron: '43 11,15 * * *'  # twice a day: Sentinel-2 image (after the late-morning overpass)
     - cron: '41 3 * * 1,4'    # Mondays and Thursdays: model verification
@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       what:
-        description: 'What to update (all, climate, snow, verification, vectors, seasonal, bulletin)'
+        description: 'What to update (all, climate, snow, verification, vectors, seasonal, bulletin, resort)'
         default: 'all'
         required: true
 
@@ -87,6 +87,11 @@ jobs:
         run: |
           pip install --quiet "cdsapi>=0.7.4" xarray netCDF4
           python scripts/update_seasonal_c3s.py
+
+      - name: Resort report (le-corbier.com) and avalanche danger
+        if: steps.plan.outputs.what == 'all' || steps.plan.outputs.what == 'bulletin' || steps.plan.outputs.what == 'resort'
+        continue-on-error: true
+        run: node scripts/update-resort.mjs
 
       - name: AI-written bulletin (GitHub Models)
         if: steps.plan.outputs.what == 'all' || steps.plan.outputs.what == 'bulletin'

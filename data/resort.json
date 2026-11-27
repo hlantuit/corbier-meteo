@@ -1,0 +1,64 @@
+{
+ "fetched": "2026-11-27T08:03:30.139Z",
+ "source": "https://www.le-corbier.com/en/slope-snow-information/",
+ "stations": [
+  {
+   "name": "L'Ouillon",
+   "z": 2431,
+   "lastUpdate": null,
+   "lastSnowfall": "2026-11-23T16:05:00.000Z",
+   "quality": "FRESH",
+   "fresh": 0,
+   "total": 25,
+   "avalanche": "CONSIDERABLE",
+   "avalancheLevel": 3
+  },
+  {
+   "name": "Le Corbier",
+   "z": 1550,
+   "lastUpdate": null,
+   "lastSnowfall": "2026-11-23T16:05:00.000Z",
+   "quality": "FRESH",
+   "fresh": 0,
+   "total": 20,
+   "avalanche": "CONSIDERABLE",
+   "avalancheLevel": 3
+  }
+ ],
+ "pistes": {
+  "green": {
+   "open": 0,
+   "total": 12
+  },
+  "blue": {
+   "open": 0,
+   "total": 16
+  },
+  "red": {
+   "open": 0,
+   "total": 14
+  },
+  "black": {
+   "open": 0,
+   "total": 4
+  }
+ },
+ "lifts": {
+  "chairlift": {
+   "open": 0,
+   "total": 7
+  },
+  "draglift": {
+   "open": 0,
+   "total": 10
+  },
+  "carpet": {
+   "open": 0,
+   "total": 10
+  }
+ },
+ "nordic": {
+  "open": 0,
+  "total": 5.5
+ }
+}

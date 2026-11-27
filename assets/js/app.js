@@ -174,6 +174,25 @@ function renderNow() {
   } else { $('next-snow-t1').textContent = t('now.next'); $('next-snow-t2').textContent = t('now.none7d'); }
 }
 
+// Resort report (baked hourly from le-corbier.com): avalanche danger and the resort's own snow depths
+const RISK_NAME = { fr: ['', 'faible', 'limité', 'marqué', 'fort', 'très fort'], en: ['', 'low', 'moderate', 'considerable', 'high', 'very high'] };
+function renderResort() {
+  const R = S.resort, box = $('resort'); if (!box) return;
+  if (!R || !R.stations || !R.stations.length || Date.now() - Date.parse(R.fetched) > 2 * 24 * HOUR) { box.hidden = true; return; }
+  const st = R.stations; const lvl = st.map(s => s.avalancheLevel).find(v => v);
+  $('ava').className = 'ava' + (lvl ? ` l${lvl}` : ''); $('ava-n').textContent = lvl || '–';
+  $('resort-t1').textContent = lvl
+    ? (fr() ? `Risque d’avalanche ${lvl}/5 · ${RISK_NAME.fr[lvl]}` : `Avalanche danger ${lvl}/5 · ${RISK_NAME.en[lvl]}`)
+    : (fr() ? 'Bulletin de la station' : 'Resort report');
+  const depths = st.filter(s => s.total !== null).map(s => `${fmt(s.total, 0)} cm ${fr() ? 'à' : 'at'} ${fmt(s.z)} m`).join(' · ');
+  const P = Object.values(R.pistes || {}); const open = P.reduce((a, p) => a + p.open, 0), tot = P.reduce((a, p) => a + p.total, 0);
+  const fresh = st.map(s => s.fresh).find(v => v > 0);
+  $('resort-t2').textContent = (fr() ? 'Station : ' : 'Resort: ') + [depths, fresh ? (fr() ? `+${fmt(fresh, 0)} cm frais` : `+${fmt(fresh, 0)} cm fresh`) : '', tot ? (fr() ? `${open}/${tot} pistes` : `${open}/${tot} runs open`) : ''].filter(Boolean).join(' · ');
+  box.href = fr() ? 'https://www.le-corbier.com/ouverture-des-pistes/' : R.source;
+  box.title = fr() ? 'Relevé déclaré par la station (le-corbier.com) ; risque issu du bulletin avalanche Météo-France (BERA)' : 'Report declared by the resort (le-corbier.com); danger from the Météo-France avalanche bulletin (BERA)';
+  box.hidden = false; fitHero();
+}
+
 function renderKpis48() {
   const a = totalsBetween(1550, S.now, S.now + 24 * HOUR), b = totalsBetween(1550, S.now, S.now + 48 * HOUR), c = totalsBetween(2265, S.now, S.now + 48 * HOUR);
   const fut = S.cons[1550].filter(d => d.time > S.now && d.time <= S.now + 48 * HOUR && d.n);
@@ -654,7 +673,7 @@ function paintDay() {
 async function renderAll() {
   if (S.fc) { renderNow(); renderKpis48(); render48(); renderModels(); initSatToggle(); syncMap(); renderBulletin(); }
   if (S.ensStats) render15();
-  renderSeason(); renderCams(); renderArchive(); renderMethods();
+  renderSeason(); renderCams(); renderArchive(); renderMethods(); renderResort();
 }
 
 async function main() {
@@ -663,6 +682,7 @@ async function main() {
   initMap();
   renderCams(); renderMethods();
   D.fetchBaked('bulletin.json').then(b => { S.ai = b; renderBulletin(); });
+  D.fetchBaked('resort.json').then(r => { S.resort = r; renderResort(); });
   const [verif, climate] = await Promise.all([D.fetchBaked('verification.json'), D.fetchBaked('climate.json')]);
   S.verif = verif; S.climate = climate; S.calib = D.makeCalibration(verif);
   renderArchive();
@@ -705,6 +725,7 @@ async function refresh() {
     const histP = D.fetchHistory(start, now), snowP = D.fetchSnowObs(start, now);
     const [fc, obs, obsC, ai] = await Promise.all([D.fetchModels(), D.fetchObs('73242003', 168).catch(() => S.obs), D.fetchObs('73318400', 8).catch(() => S.obsC), D.fetchBaked('bulletin.json')]);
     S.now = now; S.obs = obs; S.obsC = obsC; if (ai) S.ai = ai;
+    D.fetchBaked('resort.json').then(r => { if (r) { S.resort = r; renderResort(); } });
     S.fc = D.applyCalibration(fc, S.calib, S.now);
     computeConsensus(); computeBands();
     const [h, s] = await Promise.allSettled([histP, snowP]);

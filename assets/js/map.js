@@ -376,9 +376,10 @@ function addLabels(map, state) {
 }
 function updateLabelValues(state, fn) {
   state.labels.forEach(({ p, el }) => {
-    const v = el.querySelector('.v'); const txt = fn(p.z);
+    // values are modelled at the label's elevation, never measurements: shown with ≈, and not at all where flagged
+    const v = el.querySelector('.v'); const txt = p.noValue ? null : fn(p.z);
     if (txt === null || txt === undefined) { v.hidden = true; return; }
-    v.hidden = false; v.textContent = txt;
+    v.hidden = false; v.textContent = /^\d/.test(txt) ? `≈ ${txt}` : txt;
   });
 }
 

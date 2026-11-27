@@ -87,6 +87,11 @@ data/                   baked JSON/GeoJSON/images written by the workflow
 - **OpenStreetMap / Overpass** for pistes.
 - **Sentinel-2 L2A** COGs via Earth Search STAC (AWS, no account) — optional true-colour overlay only.
 - **Skaping webcams** (see Webcams).
+- **Resort report** `www.le-corbier.com/en/slope-snow-information/` (server-rendered HTML, robots.txt allows):
+  depth/fresh snow declared at L'Ouillon 2,431 m and Le Corbier 1,550 m, snow quality, avalanche danger (BERA level,
+  EN words LOW…VERY HIGH), open pistes by colour dot (#4CAF50/#1565C0/#C62828/#212121), lifts, nordic km.
+  `scripts/update-resort.mjs` → `data/resort.json` hourly; keeps the old file if parsing fails. Shown in the now-card
+  (hidden when > 48 h old). Not yet used in the snowpack fit.
 - **GitHub Models** (`models.github.ai/inference/chat/completions`, model `openai/gpt-4.1-mini`, fallback
   `openai/gpt-4o-mini`) with the workflow's `GITHUB_TOKEN` and `permissions: models: read` — free.
 
@@ -178,6 +183,9 @@ IGN GeoTIFF/WFS, Overpass, webcams with `cam-pano.jpg` / `cam-live.jpg`). Expect
 The hourly workflow is installed in `.github/workflows/` (the git credential has the `workflow` scope).
 `gh` is not installed on the owner's PC: trigger runs from Actions → Update data → Run workflow.
 Season snow-depth chart (`archiveDepth`): interior gaps ≤ 10 days are filled linearly (tooltip shows "≈").
+Map: fresh snow drawn in 7 classes (`SNOW_CLASSES`); pistes in French colours (OSM novice=green, easy=blue,
+intermediate=red, advanced/expert=black); place pills are model values shown with "≈", none at Les Perrons
+(`noValue`, no measurement there). Live webcam card opens in live mode on load (lazy iframe).
 
 ## Ideas not done yet
 
