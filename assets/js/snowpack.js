@@ -47,16 +47,53 @@ function pastPhase(hist, z, dT) {
   return { T, f };
 }
 
-function runPast(hist, ph, k, until, visit) {
+function runPast(hist, ph, k, until, visit, meltScale) {
   const st = { s: 0, h: 0 };
   if (!hist.dd) hist.dd = Float32Array.from(hist.time, ddf);
   for (let i = 0; i < hist.time.length && hist.time[i] <= until; i++) {
     const p = (hist.p[i] || 0) * k;
-    step(st, p * ph.f[i], p * (1 - ph.f[i]), ph.T[i], hist.dd[i]);
+    step(st, p * ph.f[i], p * (1 - ph.f[i]), ph.T[i], meltScale ? hist.dd[i] * meltScale(hist.time[i]) : hist.dd[i]);
     if (visit) visit(i, st);
   }
   return st;
 }
+
+// ---------- slope and aspect ----------
+// Melt depends on the sunshine a slope receives. Each elevation band is also run for slopes of 15°, 30° and 45°
+// facing the eight compass directions; the degree-day factor is scaled by the slope's clear-sky solar energy
+// relative to flat ground that day (melt = DDF × (0.4 + 0.6 R)). Flat ground (R = 1) is what the stations measure,
+// so the calibration is unchanged. Terrain shadows from surrounding ridges are not included.
+export const SLOPES = [0, 15, 30, 45];
+export const ASPECTS = [0, 45, 90, 135, 180, 225, 270, 315]; // direction the slope faces, clockwise from north
+export const CLASSES = [{ s: 0, a: 0 }, ...SLOPES.slice(1).flatMap(s => ASPECTS.map(a => ({ s, a })))];
+export const classIndex = (si, ai) => (si === 0 ? 0 : 1 + (si - 1) * ASPECTS.length + ai);
+const RAD = Math.PI / 180;
+// daily clear-sky solar energy on a slope (slope, aspect in degrees) at the site's latitude, relative units
+function dailySun(doy, slope, aspect, lat = 45.24) {
+  const dec = 23.44 * RAD * Math.sin(2 * Math.PI * (284 + doy) / 365); const phi = lat * RAD;
+  const sb = Math.sin(slope * RAD), cb = Math.cos(slope * RAD);
+  let direct = 0, diffuse = 0;
+  for (let hr = -12; hr < 12; hr += 0.25) {
+    const H = hr * 15 * RAD;
+    const sinh = Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.cos(H);
+    if (sinh <= 0) continue;
+    const h = Math.asin(sinh);
+    const az = Math.atan2(Math.sin(H), Math.cos(H) * Math.sin(phi) - Math.tan(dec) * Math.cos(phi)) + Math.PI; // from north, clockwise
+    const beam = 1361 * Math.pow(0.75, 1 / Math.max(sinh, 0.05)); // clear-sky transmissivity 0.75
+    const cosi = cb * sinh + sb * Math.cos(h) * Math.cos(az - aspect * RAD);
+    direct += beam * Math.max(0, cosi); diffuse += 0.12 * 1361 * sinh * (1 + cb) / 2;
+  }
+  return direct + diffuse;
+}
+const sunCache = new Map();
+export function sunRatio(ms, slope, aspect) {
+  if (!slope) return 1;
+  const y = new Date(ms).getUTCFullYear(); const doy = Math.floor((ms - Date.UTC(y, 0, 1)) / DAY) + 1;
+  const key = doy * 1000 + slope * 10 + aspect / 45;
+  if (!sunCache.has(key)) sunCache.set(key, dailySun(doy, slope, aspect) / dailySun(doy, 0, 0));
+  return sunCache.get(key);
+}
+const meltScaleFor = c => (c.s ? ms => 0.4 + 0.6 * sunRatio(ms, c.s, c.a) : null);
 
 // Measured snow depths → weighted observations. Weight falls with distance (12 km scale) and age (10 days);
 // Le Corbier's manual reports count 1.5×; the hourly series of the last days counts ¼ per value.
@@ -126,36 +163,54 @@ function nudgeFactors(hist, obs, par, until) {
 
 // hist: { time[], t[], rh[], p[], z0 } hourly, up to now. bands: { z: consensus[] } aligned with fcTime.
 // obs: measured snow depths. Returns depth (cm) per band for every forecast hour from now on.
-export function runSnowpack({ hist, bands, fcTime, obs, now }) {
+export function runSnowpack({ hist, bands, fcTime, obs, now, times = [] }) {
   const until = Math.min(now, hist.time[hist.time.length - 1]);
   const par = fit(hist, obs, until);
   const nudge = nudgeFactors(hist, obs, par, until);
   const iNow = fcTime.findIndex(t => t > until);
   const out = {}, nowDepth = {};
-  for (const z of BANDS) {
+  // depth for every band × slope class at the requested times (e.g. now and each morning)
+  const nb = BANDS.length, nc = CLASSES.length;
+  const grid = times.map(() => new Float32Array(nb * nc));
+  const tIdx = times.map(t => (t <= until || iNow < 0 ? -1 : Math.max(iNow, fcTime.findIndex(x => x >= t))));
+  BANDS.forEach((z, bi) => {
     const ph = pastPhase(hist, z, par.dT);
-    const r = nudge.factor(z); let nudged = nudge.at === null;
-    const st = runPast(hist, ph, par.k, until, (i, s) => {
-      if (!nudged && hist.time[i] >= nudge.at) { s.s *= r; s.h *= r; nudged = true; }
+    const r = nudge.factor(z);
+    CLASSES.forEach((c, ci) => {
+      const ms = meltScaleFor(c); let nudged = nudge.at === null;
+      const st = runPast(hist, ph, par.k, until, (i, s) => {
+        if (!nudged && hist.time[i] >= nudge.at) { s.s *= r; s.h *= r; nudged = true; }
+      }, ms);
+      tIdx.forEach((ti, k) => { if (ti === -1) grid[k][bi * nc + ci] = st.h; });
+      if (ci === 0) nowDepth[z] = st.h;
+      const series = ci === 0 ? new Float32Array(fcTime.length).fill(NaN) : null;
+      const cons = bands[z] || [];
+      for (let i = Math.max(0, iNow); i < fcTime.length && iNow >= 0; i++) {
+        const d = cons[i];
+        if (d && d.n && d.t !== undefined) step(st, d.swe || 0, d.rain || 0, d.t, ddf(fcTime[i]) * (ms ? ms(fcTime[i]) : 1));
+        if (series) series[i] = st.h;
+        tIdx.forEach((ti, k) => { if (ti === i) grid[k][bi * nc + ci] = st.h; });
+      }
+      if (series) out[z] = series;
     });
-    nowDepth[z] = st.h;
-    const series = new Float32Array(fcTime.length).fill(NaN);
-    const cons = bands[z] || [];
-    for (let i = Math.max(0, iNow); i < fcTime.length; i++) {
-      const d = cons[i];
-      if (d && d.n && d.t !== undefined) step(st, d.swe || 0, d.rain || 0, d.t, ddf(fcTime[i]));
-      series[i] = st.h;
-    }
-    out[z] = series;
-  }
+  });
   return {
     fit: { ...par, stations: nudge.pts },
     now: nowDepth,
-    // depth profile [[z, cm], ...] at a forecast time (or now)
+    // depth profile on flat ground [[z, cm], ...] at a forecast time (or now)
     at(time) {
       if (time <= until || iNow < 0) return BANDS.map(z => [z, nowDepth[z]]);
       let i = fcTime.findIndex(t => t >= time); if (i < 0) i = fcTime.length - 1;
       return BANDS.map(z => [z, isNaN(out[z][i]) ? nowDepth[z] : out[z][i]]);
+    },
+    // depth by band × slope class at times[k]: { data, bands, slopes, aspects }
+    grid(k) { return { data: grid[k], bands: BANDS, slopes: SLOPES, aspects: ASPECTS }; },
+    // depth at elevation z for a given slope and aspect, at times[k]
+    depthAt(k, z, slope, aspect) {
+      const g = grid[k]; if (!g) return null;
+      const bi = Math.max(0, Math.min(nb - 1, Math.round((z - BANDS[0]) / 100)));
+      const si = SLOPES.indexOf(slope), ai = ASPECTS.indexOf(aspect);
+      return g[bi * nc + classIndex(si, ai)];
     },
   };
 }

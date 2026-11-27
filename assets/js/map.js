@@ -76,14 +76,28 @@ function blur(a, W, H, passesY, passesX) {
   for (let p = 0; p < passesX; p++) { t.set(a); for (let y = 0; y < H; y++) for (let x = 1; x < W - 1; x++) a[y * W + x] = (t[y * W + x - 1] + 2 * t[y * W + x] + t[y * W + x + 1]) / 4; }
 }
 
-async function demTile(params, abort) {
-  const [z, x, y] = params.url.replace('igndem://', '').split('/').map(Number);
+// Decoded elevation tiles, shared by the terrain and the snow-depth layer (most recent ~150 kept)
+const demCache = new Map();
+function getDem(z, x, y) {
+  const key = `${z}/${x}/${y}`;
+  if (demCache.has(key)) { const v = demCache.get(key); demCache.delete(key); demCache.set(key, v); return v; }
   const b = tileBBox3857(z, x, y);
   const url = `${API.ignWms}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=ELEVATION.ELEVATIONGRIDCOVERAGE.HIGHRES&STYLES=&FORMAT=image/geotiff&CRS=EPSG:3857&BBOX=${b.join(',')}&WIDTH=${DEM_SIZE}&HEIGHT=${DEM_SIZE}`;
-  const r = await fetch(url, { signal: abort.signal });
-  if (!r.ok) throw new Error('DEM ' + r.status);
-  const { W, H, data } = readTiffFloat32(await r.arrayBuffer());
-  dedupe(data, W, H); blur(data, W, H, 2, 1);
+  const p = fetch(url).then(async r => {
+    if (!r.ok) throw new Error('DEM ' + r.status);
+    const { W, H, data } = readTiffFloat32(await r.arrayBuffer());
+    dedupe(data, W, H); blur(data, W, H, 2, 1);
+    return { W, H, data };
+  });
+  p.catch(() => demCache.delete(key));
+  demCache.set(key, p);
+  if (demCache.size > 150) demCache.delete(demCache.keys().next().value);
+  return p;
+}
+
+async function demTile(params) {
+  const [z, x, y] = params.url.replace('igndem://', '').split('/').map(Number);
+  const { W, H, data } = await getDem(z, x, y);
   const img = new ImageData(W, H); const px = img.data;
   for (let i = 0; i < data.length; i++) {
     let h = data[i]; if (!(h > -500 && h < 9000)) h = 0;
@@ -93,6 +107,63 @@ async function demTile(params, abort) {
   const canvas = new OffscreenCanvas(W, H); canvas.getContext('2d').putImageData(img, 0, 0);
   const blob = await canvas.convertToBlob({ type: 'image/png' });
   return { data: await blob.arrayBuffer() };
+}
+
+// ---------- snow depth by elevation, slope and aspect, drawn pixel by pixel ----------
+// The snowpack model gives a depth for each 100 m band × slope (0/15/30/45°) × aspect (8 directions); each pixel
+// takes its elevation, slope and aspect from the IGN terrain and is coloured with the interpolated depth.
+const snowState = { grid: null, stamp: 0 };
+async function snowTile(params) {
+  const [z, x, y] = params.url.replace('snowgrid://', '').split('/').map(Number);
+  const g = snowState.grid; const { W, H, data } = await getDem(z, x, y);
+  const out = new ImageData(W, H); const px = out.data;
+  if (!g) return { data: await toPng(out) };
+  const b = tileBBox3857(z, x, y);
+  const lat = Math.atan(Math.sinh(((b[1] + b[3]) / 2) / 6378137)); // tile centre latitude
+  const pix = ((b[2] - b[0]) / W) * Math.cos(lat); // ground metres per pixel
+  const { bands, slopes, aspects, data: G } = g; const nc = 1 + (slopes.length - 1) * aspects.length; const nb = bands.length;
+  const hs = new Float32Array(W * H);
+  const at = (i, j) => data[Math.min(H - 1, Math.max(0, j)) * W + Math.min(W - 1, Math.max(0, i))];
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+    const h = data[j * W + i]; if (!(h > -100 && h < 6000)) { hs[j * W + i] = -1; continue; }
+    const dzdx = (at(i + 1, j) - at(i - 1, j)) / (2 * pix), dzdn = (at(i, j - 1) - at(i, j + 1)) / (2 * pix);
+    const slope = Math.atan(Math.hypot(dzdx, dzdn)) * 180 / Math.PI;
+    let aspect = Math.atan2(-dzdx, -dzdn) * 180 / Math.PI; if (aspect < 0) aspect += 360;
+    // elevation
+    const fb = Math.max(0, Math.min(nb - 1.001, (h - bands[0]) / 100)); const b0 = Math.floor(fb), wb = fb - b0;
+    // slope
+    const fs = Math.min(slopes.length - 1.001, slope / 15); const s0 = Math.floor(fs), ws = fs - s0;
+    // aspect (circular)
+    const fa = aspect / 45; const a0 = Math.floor(fa) % 8, a1 = (a0 + 1) % 8, wa = fa - Math.floor(fa);
+    const cls = (si, ai) => (si === 0 ? 0 : 1 + (si - 1) * 8 + ai);
+    const val = bi => {
+      const v = (si, ai) => G[bi * nc + cls(si, ai)];
+      const lo = s0 === 0 ? v(0, 0) : v(s0, a0) * (1 - wa) + v(s0, a1) * wa;
+      const hi = v(s0 + 1, a0) * (1 - wa) + v(s0 + 1, a1) * wa;
+      return lo * (1 - ws) + hi * ws;
+    };
+    hs[j * W + i] = val(b0) * (1 - wb) + val(b0 + 1) * wb;
+  }
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+    const k = j * W + i, v = hs[k]; if (v < 0) continue;
+    let c;
+    if (v >= 1) {
+      const edge = (i > 0 && hs[k - 1] >= 0 && hs[k - 1] < 1) || (i < W - 1 && hs[k + 1] >= 0 && hs[k + 1] < 1) || (j > 0 && hs[k - W] >= 0 && hs[k - W] < 1) || (j < H - 1 && hs[k + W] >= 0 && hs[k + W] < 1);
+      c = edge ? EDGE_RGB : DEPTH_LUT[Math.min(DEPTH_LUT.length - 1, Math.round(v))];
+    } else c = BARE_LUT[Math.max(0, Math.min(BARE_LUT.length - 1, Math.round((data[k] - 400) / 10)))];
+    px[k * 4] = c[0]; px[k * 4 + 1] = c[1]; px[k * 4 + 2] = c[2]; px[k * 4 + 3] = 255;
+  }
+  return { data: await toPng(out) };
+}
+async function toPng(img) {
+  const canvas = new OffscreenCanvas(img.width, img.height); canvas.getContext('2d').putImageData(img, 0, 0);
+  return (await canvas.convertToBlob({ type: 'image/png' })).arrayBuffer();
+}
+const rgbOf = c => { const o = window.d3.rgb(c); return [o.r, o.g, o.b]; };
+let DEPTH_LUT, BARE_LUT; const EDGE_RGB = [191, 239, 255];
+function buildLuts() {
+  DEPTH_LUT = Array.from({ length: 401 }, (_, cm) => rgbOf(depthColor(Math.max(1, cm), 1500)));
+  BARE_LUT = Array.from({ length: 321 }, (_, k) => rgbOf(bareAt(400 + k * 10)));
 }
 
 // ---------- palettes ----------
@@ -138,6 +209,7 @@ const reliefExpr = stops => ['interpolate', ['linear'], ['elevation'], ...stops.
 // ---------- map ----------
 export function createMap(container, { onReady } = {}) {
   maplibregl.addProtocol('igndem', demTile);
+  maplibregl.addProtocol('snowgrid', snowTile); buildLuts();
   const lidar = `${API.ignWmts}?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=IGNF_LIDAR-HD_MNT_ELEVATION.ELEVATIONGRIDCOVERAGE.SHADOW&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/png`;
   const bounds = SITE.map.bounds.flat();
   const map = new maplibregl.Map({
@@ -154,6 +226,7 @@ export function createMap(container, { onReady } = {}) {
       sources: {
         dem: { type: 'raster-dem', tiles: ['igndem://{z}/{x}/{y}'], tileSize: DEM_SIZE, encoding: 'mapbox', minzoom: 10, maxzoom: 14, bounds },
         lidar: { type: 'raster', tiles: [lidar], tileSize: 256, minzoom: 12, maxzoom: 17, bounds },
+        snowgrid: { type: 'raster', tiles: ['snowgrid://{z}/{x}/{y}/0'], tileSize: 256, minzoom: 10, maxzoom: 14, bounds },
         buildings: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
         lifts: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
         pistes: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
@@ -161,6 +234,7 @@ export function createMap(container, { onReady } = {}) {
       layers: [
         { id: 'bg', type: 'background', paint: { 'background-color': '#0b1220' } },
         { id: 'relief', type: 'color-relief', source: 'dem', paint: { 'color-relief-color': reliefExpr(BASE_STOPS), 'color-relief-opacity': 1 } },
+        { id: 'snowgrid', type: 'raster', source: 'snowgrid', layout: { visibility: 'none' }, paint: { 'raster-fade-duration': 0, 'raster-resampling': 'linear' } },
         { id: 'hillshade', type: 'hillshade', source: 'dem', paint: {
           'hillshade-method': 'igor', 'hillshade-exaggeration': 0.75, 'hillshade-illumination-direction': 315, 'hillshade-illumination-anchor': 'map',
           'hillshade-shadow-color': 'rgba(2,5,12,0.85)', 'hillshade-highlight-color': 'rgba(220,235,255,0.42)', 'hillshade-accent-color': 'rgba(0,0,0,0.25)' } },
@@ -193,14 +267,20 @@ export function createMap(container, { onReady } = {}) {
     map,
     // Paint the terrain by fresh snow amount as a function of elevation: amounts = [[z, cm], ...]
     setFreshSnow(amounts) {
-      state.mode = 'fresh';
+      state.mode = 'fresh'; map.setLayoutProperty('snowgrid', 'visibility', 'none');
       const stops = []; for (let z = 400; z <= 3600; z += 50) stops.push([z, snowColor(interp(amounts, z), z)]);
       map.setPaintProperty('relief', 'color-relief-color', reliefExpr(stops));
       updateLabelValues(state, z => `${fmt(interp(amounts, z), 0)} cm`);
     },
     // Snow on the ground (cm) as a function of elevation: amounts = [[z, cm], ...]
-    setSnowDepth(amounts) {
+    // grid (optional): depth by band × slope × aspect from the snowpack model, drawn pixel by pixel
+    setSnowDepth(amounts, grid) {
       state.mode = 'depth';
+      if (grid) {
+        snowState.grid = grid; snowState.stamp++;
+        map.getSource('snowgrid').setTiles([`snowgrid://{z}/{x}/{y}/${snowState.stamp}`]);
+        map.setLayoutProperty('snowgrid', 'visibility', 'visible');
+      } else map.setLayoutProperty('snowgrid', 'visibility', 'none');
       const stops = []; for (let z = 400; z <= 3600; z += 50) stops.push([z, depthColor(interp(amounts, z), z)]);
       // a thin glacier-blue line where the snow cover starts (1 cm)
       let zl = null; for (let z = 400; z < 3600; z += 5) if (interp(amounts, z) < 1 && interp(amounts, z + 5) >= 1) zl = z + 5;
@@ -214,7 +294,7 @@ export function createMap(container, { onReady } = {}) {
     },
     // Snow line: terrain above the line in snow white, below in rain blue
     setSnowLine(lineZ) {
-      state.mode = 'line';
+      state.mode = 'line'; map.setLayoutProperty('snowgrid', 'visibility', 'none');
       if (lineZ === null || lineZ === undefined) return;
       const stops = []; for (let z = 600; z <= 3400; z += 25) {
         const d = z - lineZ; const c = d < -60 ? window.d3.interpolateRgb(baseAt(z), '#1b4f8f')(0.55) : d > 60 ? window.d3.interpolateRgb(baseAt(z), '#dff3ff')(0.78) : '#ffd27a';
