@@ -46,7 +46,7 @@ export const SITE = {
     { name: 'Pointe du Corbier', lat: 45.2343, lon: 6.2434, z: 2265, kind: 'peak' },
     { name: "L'Ouillon", lat: 45.2395, lon: 6.2150, z: 2426, kind: 'peak' },
     { name: 'Le Grand Truc', lat: 45.2743, lon: 6.2564, z: 2206, kind: 'peak' },
-    { name: 'Les Perrons', lat: 45.2165, lon: 6.1912, z: 2511, kind: 'peak', noValue: true }, // no snow measured there: no value pill
+    { name: 'Les Perrons', lat: 45.2090, lon: 6.1824, z: 2582, kind: 'peak' }, // snow observation site: top of the Trois Lacs chairlift (IGN RGE ALTI), not the Grand Perron summit
     { name: 'Les Bottières', lat: 45.2672, lon: 6.2984, z: 1267, kind: 'hamlet' },
     { name: 'Saint-Colomban-des-Villards', lat: 45.2941, lon: 6.2268, z: 1100, kind: 'hamlet' },
   ],

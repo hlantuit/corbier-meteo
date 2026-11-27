@@ -186,8 +186,9 @@ The hourly workflow is installed in `.github/workflows/` (the git credential has
 `gh` is not installed on the owner's PC: trigger runs from Actions → Update data → Run workflow.
 Season snow-depth chart (`archiveDepth`): interior gaps ≤ 10 days are filled linearly (tooltip shows "≈").
 Map: fresh snow drawn in 7 classes (`SNOW_CLASSES`); pistes in French colours (OSM novice=green, easy=blue,
-intermediate=red, advanced/expert=black); place pills are model values shown with "≈", none at Les Perrons
-(`noValue`, no measurement there). Live webcam card opens in live mode on load (lazy iframe).
+intermediate=red, advanced/expert=black); place pills are model values shown with "≈", Les Perrons is placed at the
+resort's snow observation site, the top of the Trois Lacs chairlift (45.2090 N, 6.1824 E, 2,582 m); `noValue`
+hides a place's pill if ever needed. Live webcam card opens in live mode on load (lazy iframe).
 
 ## Ideas not done yet
 
