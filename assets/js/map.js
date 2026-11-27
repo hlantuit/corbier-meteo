@@ -171,6 +171,9 @@ function buildLuts() {
 const BASE_STOPS = [[700, '#0c1424'], [1100, '#111c31'], [1500, '#16233b'], [1900, '#1c2c47'], [2300, '#253855'], [2800, '#2f4565'], [3400, '#3a5275']];
 // Fresh snow ramp (cm): from the terrain tint to glacier blue to white
 export const SNOW_RAMP = [[0, null], [1, '#1d3a5f'], [5, '#2370cd'], [10, '#519ced'], [20, '#84b9f3'], [35, '#b6d5f8'], [60, '#dff3ff'], [100, '#ffffff']];
+// Fresh snow classes (cm, lower bound → colour): sharp steps so amounts read at a glance; big dumps turn lavender
+export const SNOW_CLASSES = [[1, '#1f4a80'], [5, '#2c6fc2'], [10, '#4a98ec'], [20, '#82bff6'], [30, '#bfe0fb'], [50, '#f4f9ff'], [80, '#c7b5ff']];
+const snowClass = cm => { let k = -1; SNOW_CLASSES.forEach(([lo], i) => { if (cm >= lo) k = i; }); return k; };
 
 // Snow depth ramp (cm): any snow is already a clear cold blue, deepening to white; bare ground is a warm earth
 // tone, so the snow line reads at a glance
@@ -268,7 +271,16 @@ export function createMap(container, { onReady } = {}) {
     // Paint the terrain by fresh snow amount as a function of elevation: amounts = [[z, cm], ...]
     setFreshSnow(amounts) {
       state.mode = 'fresh'; map.setLayoutProperty('snowgrid', 'visibility', 'none');
-      const stops = []; for (let z = 400; z <= 3600; z += 50) stops.push([z, snowColor(interp(amounts, z), z)]);
+      // classes: walk up in 5 m steps; each class boundary becomes a 5 m-wide colour step, below 1 cm the terrain tint
+      const colorAt = z => { const k = snowClass(interp(amounts, z)); return k < 0 ? baseAt(z) : SNOW_CLASSES[k][1]; };
+      const stops = []; let kPrev = null;
+      for (let z = 400; z <= 3600; z += 5) {
+        const k = snowClass(interp(amounts, z));
+        if (k === kPrev) { if (k < 0 && z % 100 === 0) stops.push([z, baseAt(z)]); }
+        else { if (kPrev !== null && stops.length && stops[stops.length - 1][0] !== z - 5) stops.push([z - 5, colorAt(z - 5)]); stops.push([z, colorAt(z)]); }
+        kPrev = k;
+      }
+      if (stops[stops.length - 1][0] !== 3600) stops.push([3600, colorAt(3600)]);
       map.setPaintProperty('relief', 'color-relief-color', reliefExpr(stops));
       updateLabelValues(state, z => `${fmt(interp(amounts, z), 0)} cm`);
     },

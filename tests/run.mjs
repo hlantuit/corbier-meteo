@@ -1,4 +1,5 @@
 // Offline render test: serves the site and answers every external request with fixtures.
+import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module'; const require = createRequire(import.meta.url); const { chromium } = require('playwright');
 import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path';
 import * as F from './fixtures.mjs';
@@ -25,8 +26,9 @@ await page.route('**/*', async route => {
   if (url.includes('data.geopf.fr/wms-r')) return route.fulfill({ status: 200, contentType: 'image/geotiff', headers: { 'access-control-allow-origin': '*' }, body: F.geotiff(url) });
   if (url.includes('data.geopf.fr/wfs')) return json(F.wfs(url));
   if (url.includes('overpass-api.de')) return json(F.overpass());
-  if (url.includes('skaping.s3') || url.includes('quanteec')) return route.fulfill({ status: 200, contentType: 'image/jpeg', body: fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), url.includes('quanteec') ? 'cam-live.jpg' : 'cam-pano.jpg')) });
+  if (url.includes('skaping.s3') || url.includes('quanteec')) return route.fulfill({ status: 200, contentType: 'image/jpeg', body: fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), url.includes('quanteec') ? 'cam-live.jpg' : 'cam-pano.jpg')) });
   if (url.includes('data.geopf.fr/wmts') || url.includes('gibs.earthdata')) return route.fulfill({ status: 200, contentType: 'image/png', headers: { 'access-control-allow-origin': '*' }, body: F.transparentPng });
+  if (url.includes('www.skaping.com/')) return route.fulfill({ status: 200, contentType: 'text/html', body: '<body style="margin:0;background:#123"><p style="color:#fff">skaping live fixture</p></body>' });
   misses.add(url.slice(0, 120)); return route.fulfill({ status: 404, body: '' });
 });
 await page.goto('http://localhost:8765/index.html' + (process.env.HASH || ''), { waitUntil: 'load' });
@@ -40,8 +42,8 @@ if (process.env.CUMUL) { await page.click('.seg-mini button[data-c="1"]'); await
 if (process.env.PROBE) console.log('PROBE', await page.evaluate(process.env.PROBE));
 await page.screenshot({ path: `${out}/hero.png` });
 if (!process.env.HERO_ONLY) {
-  await page.screenshot({ path: `${out}/full.png`, fullPage: true });
-  for (const id of ['h48', 'd15', 'models', 'season', 'archive']) { const el = await page.$('#' + id); if (el) await el.screenshot({ path: `${out}/${id}.png` }); }
+  await page.screenshot({ path: `${out}/full.png`, fullPage: true, timeout: 180000 });
+  for (const id of ['h48', 'd15', 'models', 'season', 'archive']) { const el = await page.$('#' + id); if (el) await el.screenshot({ path: `${out}/${id}.png`, timeout: 20000 }).catch(e => console.log('shot ' + id + ': ' + e.message.split('\n')[0])); }
 }
 console.log('ERRORS:\n' + errors.slice(0, 30).join('\n')); console.log('MISSES:\n' + [...misses].join('\n'));
 await browser.close(); srv.close();

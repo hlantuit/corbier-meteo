@@ -572,11 +572,26 @@ export function archiveDepth(el, seasons) {
     svg.append('text').attr('class', 'ref-text').attr('x', m.l).attr('y', m.t - 2).text('cm');
     const pal = ['#9887ef', '#00a888', '#e24d8b', '#d28e05'];
     const line = d3.line().x((v, i) => x(X(i))).y(v => y(v)).defined(v => v !== null).curve(d3.curveMonotoneX);
+    // Fill interior gaps of up to MAXGAP days linearly (missed manual reports, weekends); longer gaps stay open.
+    const MAXGAP = 10;
+    const fillGaps = vals => {
+      const out = vals.map(v => (v === undefined ? null : v));
+      let prev = -1;
+      out.forEach((v, i) => {
+        if (v === null) return;
+        if (prev >= 0 && i - prev > 1 && i - prev - 1 <= MAXGAP) {
+          for (let j = prev + 1; j < i; j++) out[j] = out[prev] + (v - out[prev]) * (j - prev) / (i - prev);
+        }
+        prev = i;
+      });
+      return out;
+    };
+    seasons.forEach(s => { s.filled = fillGaps(s.values); });
     const ends = [];
     seasons.forEach((s, k) => {
       const c = s.current ? COLORS.snow : pal[k % pal.length];
-      if (s.current) svg.append('path').attr('d', d3.area().x((v, i) => x(X(i))).y0(y(0)).y1(v => y(v)).defined(v => v !== null).curve(d3.curveMonotoneX)(s.values)).attr('fill', 'rgba(223,243,255,.10)');
-      svg.append('path').attr('d', line(s.values)).attr('fill', 'none').attr('stroke', c).attr('stroke-width', s.current ? 2.8 : 1.6);
+      if (s.current) svg.append('path').attr('d', d3.area().x((v, i) => x(X(i))).y0(y(0)).y1(v => y(v)).defined(v => v !== null).curve(d3.curveMonotoneX)(s.filled)).attr('fill', 'rgba(223,243,255,.10)');
+      svg.append('path').attr('d', line(s.filled)).attr('fill', 'none').attr('stroke', c).attr('stroke-width', s.current ? 2.8 : 1.6);
       const li = s.values.reduce((a, v, i) => (v !== null ? i : a), -1);
       if (li >= 0) ends.push({ y: y(s.values[li]), xx: x(X(li)), lab: s.label, c, cur: s.current, v: s.values[li] });
     });
@@ -587,7 +602,7 @@ export function archiveDepth(el, seasons) {
     svg.append('rect').attr('x', m.l).attr('y', m.t).attr('width', W - m.l - m.r).attr('height', H - m.t - m.b).attr('fill', 'transparent')
       .on('pointermove', evt => {
         const [mx] = d3.pointer(evt); const i = Math.max(0, Math.min(n - 1, Math.round((+x.invert(mx) - base) / 864e5)));
-        showTip(evt, `<div class="tt-title">${fmtUtc(X(i), { day: 'numeric', month: 'long' })}</div>` + seasons.map((s, k) => row(s.label + (s.source === 'auto' ? " (St-Jean)" : ''), s.values[i] === null || s.values[i] === undefined ? '–' : `${fmt(s.values[i], 0)} cm`, s.current ? COLORS.snow : pal[k % pal.length])).join(''));
+        showTip(evt, `<div class="tt-title">${fmtUtc(X(i), { day: 'numeric', month: 'long' })}</div>` + seasons.map((s, k) => row(s.label + (s.source === 'auto' ? " (St-Jean)" : ''), s.values[i] !== null && s.values[i] !== undefined ? `${fmt(s.values[i], 0)} cm` : (s.filled[i] !== null ? `≈ ${fmt(s.filled[i], 0)} cm` : '–'), s.current ? COLORS.snow : pal[k % pal.length])).join(''));
       }).on('pointerleave', hideTip);
   });
 }

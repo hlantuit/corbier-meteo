@@ -1,5 +1,6 @@
 // Runs scripts/update-bulletin.mjs offline: every request is answered by the test fixtures (no GITHUB_TOKEN → draft only)
 import * as F from './fixtures.mjs';
+import { fileURLToPath } from 'node:url';
 const now = Date.now();
 globalThis.fetch = async url => {
   url = String(url);
@@ -7,6 +8,6 @@ globalThis.fetch = async url => {
     : url.includes('ensemble-api') ? F.ensemble(url, now) : url.includes('tabular-api') ? F.tabular(url, now) : null;
   return { ok: !!body, status: body ? 200 : 404, json: async () => body || {} };
 };
-process.chdir(new URL('..', import.meta.url).pathname);
+process.chdir(fileURLToPath(new URL('..', import.meta.url)));
 delete process.env.GITHUB_TOKEN;
 await import('../scripts/update-bulletin.mjs');

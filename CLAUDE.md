@@ -55,7 +55,6 @@ assets/js/i18n.js       strings FR/EN, fmt helpers, language toggle (localStorag
 assets/js/package.json  {"type":"module"} so Node scripts can import the browser modules
 vendor/                 maplibre-gl 5.24.1, d3 v7 (vendored)
 scripts/                Node/Python jobs run by the workflow (see Workflow)
-scripts/workflow/update-data.yml   the CURRENT workflow (see "Pending" — must be moved to .github/workflows/)
 tests/                  Playwright render test with fixtures, offline bulletin test
 data/                   baked JSON/GeoJSON/images written by the workflow
 ```
@@ -154,7 +153,7 @@ still if the schedule ever changes.
 
 ## Workflow (`.github/workflows/update-data.yml`)
 
-Schedule (UTC) in the current version (kept in `scripts/workflow/update-data.yml`):
+Schedule (UTC):
 hourly :07 bulletin · 05:17 & 17:17 climate (ERA5 archive + station seasons) · 11:43 & 15:43 Sentinel-2 ·
 Mon & Thu 03:41 verification (~6 min) · 2nd of month vectors · 14th of month C3S seasonal.
 `workflow_dispatch` input `what` = all | climate | snow | verification | vectors | seasonal | bulletin.
@@ -174,16 +173,11 @@ node bulletin-node.mjs                                        # runs scripts/upd
 `fixtures.mjs` answers every external host (forecast, historical, ensemble, seasonal, tabular incl. `__in`,
 IGN GeoTIFF/WFS, Overpass, webcams with `cam-pano.jpg` / `cam-live.jpg`). Expect "ERRORS:" and "MISSES:" empty.
 
-## Pending (do these first)
+## Status (27 Nov 2026)
 
-1. `git pull --rebase` then push anything local.
-2. Move the new workflow into place:
-   `git mv -f scripts/workflow/update-data.yml .github/workflows/update-data.yml`, commit, push.
-   (Needs the `workflow` scope on the git credential; if GitHub refuses, tell the owner to paste the file on
-   github.com.) Then trigger it: `gh workflow run update-data.yml -f what=all` (or ask the owner to click
-   Actions → Update data → Run workflow → `all`). Afterwards `data/bulletin.json` should appear and the page's
-   bulletin label should say "Rédigé par IA (gpt-4.1-mini, via GitHub Models)".
-3. Check that the scheduled runs actually happen (Actions tab) and that the GitHub Models step succeeds.
+The hourly workflow is installed in `.github/workflows/` (the git credential has the `workflow` scope).
+`gh` is not installed on the owner's PC: trigger runs from Actions → Update data → Run workflow.
+Season snow-depth chart (`archiveDepth`): interior gaps ≤ 10 days are filled linearly (tooltip shows "≈").
 
 ## Ideas not done yet
 

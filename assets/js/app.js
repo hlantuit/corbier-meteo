@@ -3,7 +3,7 @@ import { SITE, MODELS, COLORS, CAMS, SKAPING_S3 } from './config.js';
 import { t, fmt, getLang, setLang, applyStatic } from './i18n.js';
 import * as D from './data.js';
 import * as C from './charts.js';
-import { createMap, SNOW_RAMP, DEPTH_RAMP, BARE_COLOR } from './map.js';
+import { createMap, SNOW_RAMP, SNOW_CLASSES, DEPTH_RAMP, BARE_COLOR } from './map.js';
 import * as SP from './snowpack.js';
 import * as B from './bulletin.js';
 
@@ -416,6 +416,8 @@ function renderCams() {
       <div class="still${c.thumb ? '' : ' pano'}"><div class="ph">${fr() ? 'Chargement…' : 'Loading…'}</div></div>
       <figcaption><span><span class="t"></span><span class="s"></span><span class="when"></span></span><span class="acts"></span></figcaption></figure>`).join('');
     grid.dataset.built = '1';
+    // the live camera starts in live mode (its iframe is lazy, so the stream loads only near the viewport)
+    CAMS.filter(c => c.thumb).forEach(c => toggleLive(c, grid.querySelector(`.cam[data-id="${c.id}"]`)));
     refreshStills();
     setInterval(() => { if (!document.hidden) refreshStills(); }, 10 * 60e3);
   }
@@ -433,7 +435,7 @@ function toggleLive(c, el) {
   if (fr0) { fr0.remove(); el.querySelector('.still').hidden = false; }
   else {
     el.querySelector('.still').hidden = true;
-    el.insertAdjacentHTML('afterbegin', `<iframe src="${c.page}" title="${camLabel(c).t}" allow="fullscreen; autoplay" referrerpolicy="no-referrer-when-downgrade"></iframe>`);
+    el.insertAdjacentHTML('afterbegin', `<iframe src="${c.page}" title="${camLabel(c).t}" allow="fullscreen; autoplay" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>`);
   }
   renderCams();
 }
@@ -613,7 +615,9 @@ function syncMap() {
       : `Model anchored on ${n} Météo-France stations${f.rmse !== null ? ` · error ±${fmt(f.rmse, 0)} cm` : ''}`;
   }
   leg.innerHTML = (depth ? `<div class="legend" style="margin:6px 8px 0"><span class="k"><span class="sq" style="background:${BARE_COLOR}"></span>${fr() ? 'Sans neige' : 'No snow'}</span><span class="k"><span class="sw" style="background:#bfefff"></span>${fr() ? 'Limite de l’enneigement' : 'Edge of the snow'}</span></div>` : '')
-    + `<div class="swatch-ramp" style="background:linear-gradient(90deg,${depth ? '' : '#16233b,'}${grad})"></div><div class="ramp-labels">${ticks.map(x => `<span>${x}</span>`).join('')}</div>${note ? `<div class="ramp-labels" style="margin:6px 8px 4px;display:block;line-height:1.35">${note}</div>` : ''}`;
+    + (depth ? `<div class="swatch-ramp" style="background:linear-gradient(90deg,${grad})"></div><div class="ramp-labels">${ticks.map(x => `<span>${x}</span>`).join('')}</div>`
+      : `<div class="snow-classes">${SNOW_CLASSES.map(([lo, c], i) => `<span><i style="background:${c}"></i>${i < SNOW_CLASSES.length - 1 ? lo : `${lo}+`}</span>`).join('')}<em>cm</em></div>`)
+    + `${note ? `<div class="ramp-labels" style="margin:6px 8px 4px;display:block;line-height:1.35">${note}</div>` : ''}`;
 }
 // Paint the selected day on the map and in the read-out
 // Keep the map above the docked day strip, and the hero within the first screen under the bulletin

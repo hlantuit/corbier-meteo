@@ -107,6 +107,11 @@ a:hover { text-decoration: underline; text-underline-offset: 3px; }
 .toggle input:focus-visible { outline: 2px solid var(--glacier); outline-offset: 2px; }
 .toggle.on { color: var(--ink); }
 .swatch-ramp { height: 6px; border-radius: 999px; margin: 6px 8px 2px; }
+.snow-classes { display: flex; align-items: flex-end; gap: 2px; margin: 6px 8px 2px; color: var(--ink-3); font-size: 10px; font-variant-numeric: tabular-nums; }
+.snow-classes span { flex: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; white-space: nowrap; }
+.snow-classes i { display: block; width: 100%; height: 8px; border-radius: 2px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+.snow-classes span:first-child i { border-radius: 4px 2px 2px 4px; } .snow-classes span:last-of-type i { border-radius: 2px 4px 4px 2px; }
+.snow-classes em { font-style: normal; margin-left: 3px; }
 .ramp-labels { display: flex; justify-content: space-between; margin: 0 8px; color: var(--ink-3); font-size: 10.5px; }
 
 .view-switch { display: flex; gap: 8px; margin-left: 14px; }
