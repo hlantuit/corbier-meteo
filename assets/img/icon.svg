@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Home-screen icon. Full-bleed square (the phone rounds the corners); motif inside the central 70 % so it
+       survives Android's maskable crop. PNGs in assets/img/ are rendered from this file. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#16305a"/>
+      <stop offset=".62" stop-color="#0b1730"/>
+      <stop offset="1" stop-color="#05080f"/>
+    </linearGradient>
+    <linearGradient id="snow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset=".55" stop-color="#dff3ff"/>
+      <stop offset="1" stop-color="#7fd4ff"/>
+    </linearGradient>
+    <linearGradient id="far" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4f7fc4"/>
+      <stop offset="1" stop-color="#22406e"/>
+    </linearGradient>
+    <radialGradient id="glow" cx=".5" cy=".36" r=".5">
+      <stop offset="0" stop-color="#7fd4ff" stop-opacity=".28"/>
+      <stop offset="1" stop-color="#7fd4ff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#sky)"/>
+  <rect width="512" height="512" fill="url(#glow)"/>
+  <!-- snowflake in the sky -->
+  <g transform="translate(352 150)" stroke="#dff3ff" stroke-width="7" stroke-linecap="round" fill="none" opacity=".9">
+    <g id="arm"><path d="M0 0 V-34 M0 -20 l-9 -9 M0 -20 l9 -9"/></g>
+    <use href="#arm" transform="rotate(60)"/><use href="#arm" transform="rotate(120)"/>
+    <use href="#arm" transform="rotate(180)"/><use href="#arm" transform="rotate(240)"/><use href="#arm" transform="rotate(300)"/>
+  </g>
+  <!-- distant ridge -->
+  <path d="M60 372 L150 286 L196 320 L262 250 L336 318 L384 284 L452 372 Z" fill="url(#far)" opacity=".75"/>
+  <!-- main peaks -->
+  <path d="M70 392 L196 216 L252 288 L304 196 L442 392 Z" fill="url(#snow)"/>
+  <path d="M196 216 L226 260 L208 276 L190 256 Z M304 196 L340 252 L314 268 L296 248 L280 262 Z" fill="#0f1726" opacity=".28"/>
+  <!-- snow ground line -->
+  <path d="M70 392 H442" stroke="#7fd4ff" stroke-width="6" stroke-linecap="round" opacity=".5"/>
+</svg>

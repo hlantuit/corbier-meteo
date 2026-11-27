@@ -53,6 +53,8 @@ a:hover { text-decoration: underline; text-underline-offset: 3px; }
 .topbar {
   position: sticky; top: 0; z-index: 50; display: flex; align-items: center; gap: 20px;
   padding: 12px clamp(16px, 3vw, 36px); background: rgba(5, 8, 15, 0.62);
+  /* home-screen app on iPhone: the status bar overlays the page (black-translucent) */
+  padding-top: calc(12px + env(safe-area-inset-top, 0px));
   backdrop-filter: blur(18px) saturate(140%); -webkit-backdrop-filter: blur(18px) saturate(140%);
   border-bottom: 1px solid var(--line);
 }
