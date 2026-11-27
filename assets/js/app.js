@@ -184,10 +184,10 @@ function renderResort() {
   $('resort-t1').textContent = lvl
     ? (fr() ? `Risque d’avalanche ${lvl}/5 · ${RISK_NAME.fr[lvl]}` : `Avalanche danger ${lvl}/5 · ${RISK_NAME.en[lvl]}`)
     : (fr() ? 'Bulletin de la station' : 'Resort report');
-  const depths = st.filter(s => s.total !== null).map(s => `${fmt(s.total, 0)} cm ${fr() ? 'à' : 'at'} ${fmt(s.z)} m`).join(' · ');
+  // The resort's snow depths are not shown: they carry no measurement date and no documented site (Lumiplan feed),
+  // so they would contradict the dated Météo-France measurement above. Only the danger level and open runs are kept.
   const P = Object.values(R.pistes || {}); const open = P.reduce((a, p) => a + p.open, 0), tot = P.reduce((a, p) => a + p.total, 0);
-  const fresh = st.map(s => s.fresh).find(v => v > 0);
-  $('resort-t2').textContent = (fr() ? 'Station : ' : 'Resort: ') + [depths, fresh ? (fr() ? `+${fmt(fresh, 0)} cm frais` : `+${fmt(fresh, 0)} cm fresh`) : '', tot ? (fr() ? `${open}/${tot} pistes` : `${open}/${tot} runs open`) : ''].filter(Boolean).join(' · ');
+  $('resort-t2').textContent = [fr() ? 'Bulletin Météo-France (Maurienne), relayé par la station' : 'Météo-France bulletin (Maurienne), via the resort', tot ? (fr() ? `${open}/${tot} pistes ouvertes` : `${open}/${tot} runs open`) : ''].filter(Boolean).join(' · ');
   box.href = fr() ? 'https://www.le-corbier.com/ouverture-des-pistes/' : R.source;
   box.title = fr() ? 'Relevé déclaré par la station (le-corbier.com) ; risque issu du bulletin avalanche Météo-France (BERA)' : 'Report declared by the resort (le-corbier.com); danger from the Météo-France avalanche bulletin (BERA)';
   box.hidden = false; fitHero();
