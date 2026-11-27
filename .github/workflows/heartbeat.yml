@@ -1,0 +1,53 @@
+name: Heartbeat
+
+# GitHub's own cron is best effort: on this account "hourly" schedules really run every 4–9 hours.
+# This workflow keeps a true hourly beat without any key or external service:
+#   1. start "Update data" with the tasks due this hour (same timetable as its own cron lines),
+#   2. wait until the next hh:13 UTC,
+#   3. start itself again (a workflow_dispatch sent with GITHUB_TOKEN does start a new run).
+# If the chain ever breaks (a failed or dropped run), the schedule below restarts it within a few hours,
+# or start it by hand: Actions → Heartbeat → Run workflow. The concurrency group keeps a single chain:
+# a second start waits as "pending" and replaces the older pending one.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '37 */6 * * *'
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: heartbeat
+  cancel-in-progress: false
+
+jobs:
+  beat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Start "Update data" with the tasks due this hour
+        continue-on-error: true
+        run: |
+          H=$((10#$(date -u +%H))); D=$((10#$(date -u +%d))); DOW=$(date -u +%w)
+          W="bulletin"
+          case $H in 5|17) W="$W climate" ;; esac
+          case $H in 11|15) W="$W snow" ;; esac
+          [ $H -eq 3 ] && { [ "$DOW" = 1 ] || [ "$DOW" = 4 ]; } && W="$W verification"
+          [ $H -eq 2 ] && [ "$DOW" = 0 ] && W="$W snowcal"
+          [ $H -eq 4 ] && [ $D -eq 2 ] && W="$W vectors"
+          [ $H -eq 6 ] && [ $D -eq 14 ] && W="$W seasonal"
+          echo "Update data: $W"
+          gh workflow run update-data.yml --ref main -f what="$W"
+
+      - name: Wait for the next hh:13 UTC
+        run: |
+          NOW=$(date +%s); S=$(( (13*60 - NOW % 3600 + 7200) % 3600 ))
+          [ $S -lt 300 ] && S=$((S + 3600))
+          echo "Sleeping $S s"; sleep $S
+
+      - name: Start the next beat
+        run: gh workflow run heartbeat.yml --ref main

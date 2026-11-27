@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       what:
-        description: 'What to update (all, climate, snow, verification, vectors, seasonal, bulletin, resort, snowcal)'
+        description: 'What to update, one or several separated by spaces (all, climate, snow, verification, vectors, seasonal, bulletin, resort, snowcal)'
         default: 'all'
         required: true
 
@@ -59,34 +59,34 @@ jobs:
           echo "Running: $W"
 
       - name: Archive and snow depth
-        if: steps.plan.outputs.what == 'all' || steps.plan.outputs.what == 'climate'
+        if: contains(format(' {0} ', steps.plan.outputs.what), ' all ') || contains(format(' {0} ', steps.plan.outputs.what), ' climate ')
         continue-on-error: true
         run: node scripts/update-climate.mjs
 
       - name: Model verification (about 6 minutes)
-        if: steps.plan.outputs.what == 'all' || steps.plan.outputs.what == 'verification'
+        if: contains(format(' {0} ', steps.plan.outputs.what), ' all ') || contains(format(' {0} ', steps.plan.outputs.what), ' verification ')
         continue-on-error: true
         run: node scripts/update-verification.mjs
 
       - name: Snowpack calibration over past winters (about 2 minutes)
-        if: steps.plan.outputs.what == 'all' || steps.plan.outputs.what == 'snowcal'
+        if: contains(format(' {0} ', steps.plan.outputs.what), ' all ') || contains(format(' {0} ', steps.plan.outputs.what), ' snowcal ')
         continue-on-error: true
         run: node scripts/calibrate-snowpack.mjs
 
       - name: Buildings, lifts, pistes
-        if: steps.plan.outputs.what == 'all' || steps.plan.outputs.what == 'vectors'
+        if: contains(format(' {0} ', steps.plan.outputs.what), ' all ') || contains(format(' {0} ', steps.plan.outputs.what), ' vectors ')
         continue-on-error: true
         run: node scripts/update-vectors.mjs
 
       - name: Sentinel-2 snow map
-        if: steps.plan.outputs.what == 'all' || steps.plan.outputs.what == 'snow'
+        if: contains(format(' {0} ', steps.plan.outputs.what), ' all ') || contains(format(' {0} ', steps.plan.outputs.what), ' snow ')
         continue-on-error: true
         run: |
           pip install --quiet rasterio numpy pillow requests
           python scripts/update_snowcover.py
 
       - name: C3S multi-system seasonal forecast
-        if: steps.plan.outputs.what == 'all' || steps.plan.outputs.what == 'seasonal'
+        if: contains(format(' {0} ', steps.plan.outputs.what), ' all ') || contains(format(' {0} ', steps.plan.outputs.what), ' seasonal ')
         continue-on-error: true
         env:
           ECMWF_DATASTORE_KEY: ${{ secrets.ECMWF_DATASTORE_KEY }}
@@ -95,12 +95,12 @@ jobs:
           python scripts/update_seasonal_c3s.py
 
       - name: Resort report (le-corbier.com) and avalanche danger
-        if: steps.plan.outputs.what == 'all' || steps.plan.outputs.what == 'bulletin' || steps.plan.outputs.what == 'resort'
+        if: contains(format(' {0} ', steps.plan.outputs.what), ' all ') || contains(format(' {0} ', steps.plan.outputs.what), ' bulletin ') || contains(format(' {0} ', steps.plan.outputs.what), ' resort ')
         continue-on-error: true
         run: node scripts/update-resort.mjs
 
       - name: AI-written bulletin (OpenAI-compatible API, configured by secrets; skipped when none)
-        if: steps.plan.outputs.what == 'all' || steps.plan.outputs.what == 'bulletin'
+        if: contains(format(' {0} ', steps.plan.outputs.what), ' all ') || contains(format(' {0} ', steps.plan.outputs.what), ' bulletin ')
         continue-on-error: true
         env:
           AI_API_KEY: ${{ secrets.AI_API_KEY }}

@@ -179,9 +179,18 @@ still if the schedule ever changes.
 Schedule (UTC):
 hourly :13 bulletin + resort · 05:17 & 17:17 climate (ERA5 archive + station seasons) · 11:43 & 15:43 Sentinel-2 ·
 Mon & Thu 03:41 verification (~6 min) · 2nd of month vectors · 14th of month C3S seasonal.
-`workflow_dispatch` input `what` = all | climate | snow | verification | vectors | seasonal | bulletin.
+`workflow_dispatch` input `what` = one or several (space-separated) of all | climate | snow | verification |
+vectors | seasonal | bulletin | resort | snowcal.
 Permissions: `contents: write`. Steps are `continue-on-error`; final step commits `data/` and
 pushes with `git pull --rebase`.
+
+GitHub's cron is best effort: on this account "hourly" schedules really fire every 4–9 h (seen on alfred-portal),
+and this repo had no scheduled run at all in its first 7 h. So **`.github/workflows/heartbeat.yml`** drives the real
+timetable: it dispatches `update-data.yml` with the tasks due this hour (same table as the cron lines), sleeps to
+the next hh:13 UTC, then dispatches itself (GITHUB_TOKEN may send workflow_dispatch). Its own cron `37 */6 * * *`
+restarts a broken chain; concurrency group `heartbeat` keeps one chain. The cron lines in update-data.yml stay as a
+backup (duplicate runs are harmless). If data stop updating: Actions → Heartbeat → Run workflow.
+No local scheduled task is needed (the old Windows task "corbier-meteo publish" was disabled on 27 Nov 2026).
 
 ## Testing
 
