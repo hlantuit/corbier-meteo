@@ -494,15 +494,34 @@ async function refreshStills() {
 }
 
 // ---------- archive ----------
+// Cumulative snowfall since 1 November, at the village or (toggle) at the top of the resort (climate.json `top`)
+function renderArchiveCum() {
+  const c0 = S.climate; if (!c0) return;
+  const seg = $('arch-cum-z'), hasTop = !!(c0.top && c0.top.pct);
+  seg.hidden = !hasTop;
+  const atTop = hasTop && S.archTop, c = atTop ? c0.top : c0, z = atTop ? TZ : BZ;
+  seg.querySelectorAll('button').forEach(b => {
+    const top = b.dataset.z === 'top';
+    b.textContent = top ? `${SITE.top.short || SITE.top.name} · ${zm(TZ)}` : `Village · ${zm(BZ)}`;
+    b.setAttribute('aria-pressed', String(top === !!atTop));
+    b.onclick = () => { S.archTop = top; renderArchiveCum(); };
+  });
+  $('arch-cum-title').textContent = fr() ? `Cumul de neige depuis le 1ᵉʳ novembre à ${zm(z)}` : `Snowfall since 1 November at ${zm(z)}`;
+  const ci = c.current.length - 1;
+  const lastDay = new Intl.DateTimeFormat(fr() ? 'fr-FR' : 'en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(c.currentWinter - 1, 10, 1) + ci * 864e5));
+  const where = atTop ? ` (${SITE.top.name})` : '';
+  // ERA5 re-split at the summit: above ~1,700 m nearly all winter precipitation is already snow, so the curve saturates
+  const note = !atTop ? '' : fr() ? ' Au-dessus de 1 700 m environ, presque toutes les précipitations d’hiver tombent déjà en neige dans ERA5 : le cumul y plafonne (pas de gradient de précipitations avec l’altitude).' : ' Above about 1,700 m nearly all winter precipitation already falls as snow in ERA5, so the total levels off (no precipitation gradient with elevation).';
+  $('arch-cum-sub').textContent = (fr() ? `Réanalyse ERA5 à ${zm(z)}${where}, jusqu’au ${lastDay}. Bandes : 10–90 % et 25–75 % des hivers 1991–2020.` : `ERA5 reanalysis at ${zm(z)}${where}, up to ${lastDay}. Bands: 10–90 % and 25–75 % of the 1991–2020 winters.`) + note;
+  C.legend('leg-arch-cum', [{ color: COLORS.snow, label: t('leg.thisSeason') }, { color: '#9887ef', label: c.lastLabel }, { color: COLORS.ink2, label: t('leg.normal') }]);
+  C.archiveCum('chart-arch-cum', c);
+}
+
 function renderArchive() {
   const c = S.climate; if (!c) { ['chart-arch-cum', 'chart-arch-depth', 'chart-arch-totals'].forEach(id => $(id).innerHTML = `<div class="error">${t('misc.error')}</div>`); return; }
   const full = c.winters.filter(w => !w.partial);
   $('archive-over').textContent = `${full[0].year - 1} → ${new Date().getFullYear()}`;
-  const ci = c.current.length - 1;
-  const lastDay = new Intl.DateTimeFormat(fr() ? 'fr-FR' : 'en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(c.currentWinter - 1, 10, 1) + ci * 864e5));
-  $('arch-cum-sub').textContent = fr() ? `Réanalyse ERA5 à ${zm(BZ)}, jusqu’au ${lastDay}. Bandes : 10–90 % et 25–75 % des hivers 1991–2020.` : `ERA5 reanalysis at ${zm(BZ)}, up to ${lastDay}. Bands: 10–90 % and 25–75 % of the 1991–2020 winters.`;
-  C.legend('leg-arch-cum', [{ color: COLORS.snow, label: t('leg.thisSeason') }, { color: '#9887ef', label: c.lastLabel }, { color: COLORS.ink2, label: t('leg.normal') }]);
-  C.archiveCum('chart-arch-cum', c);
+  renderArchiveCum();
   if (c.station) {
     const st = c.station; const isC = st.id === '73318400';
     $('arch-depth-sub').textContent = isC

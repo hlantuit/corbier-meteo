@@ -12,6 +12,13 @@ const j = await getJSON(url);
 log(SITE.name, 'archive days:', j.daily.time.length);
 const C = Cc.buildClimate(j.daily, { elevation: SITE.base.z });
 
+// Same ERA5 cell at the top of the resort: Open-Meteo moves the temperature to that elevation and re-splits
+// precipitation into snow and rain, so the summit curve differs (e.g. 2024-25 at Le Corbier: 273 cm at 1,550 m,
+// 385 cm at 2,265 m). Only what the cumulative chart needs is kept (its base/summit toggle).
+const jt = await getJSON(url.replace(`elevation=${SITE.base.z}`, `elevation=${SITE.top.z}`));
+const T = Cc.buildClimate(jt.daily, { elevation: SITE.top.z });
+C.top = { elevation: SITE.top.z, pct: T.pct, current: T.current, currentWinter: T.currentWinter, last: T.last, lastLabel: T.lastLabel };
+
 // Measured snow depth: Le Corbier's own observations (ski season), last four winters.
 // Until this season's first report, the current winter comes from Saint-Jean-d'Arves (automatic, 4 km away).
 const y = new Date().getUTCFullYear(); const since = `${y - 4}093023`;
@@ -27,6 +34,6 @@ seasons.forEach(s => { s.current = s.winter === curWinter; });
 C.station = { id: '73318400', name: 'Le Corbier', elev: 1585, seasons: seasons.slice(-4) };
 
 const trim = a => a.slice(0, a.reduce((acc, v, i) => (v !== null ? i + 1 : acc), 0));
-C.current = trim(C.current);
+C.current = trim(C.current); C.top.current = trim(C.top.current);
 C.station.seasons.forEach(s => { s.values = trim(s.values); });
 writeJSON(`data/${SITE.dataDir}climate.json`, C);
