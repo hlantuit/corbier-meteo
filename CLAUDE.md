@@ -32,6 +32,17 @@ La Toussuire webcams (Skaping stills, no public viewer, so no live button; link 
 plus `les-sybelles/ouillon`. Home-screen app: `manifest-toussuire.webmanifest` (swapped by an inline script in <head>).
 Render test: `HASH='?site=toussuire'`.
 
+**Four resorts since 28 Nov 2026**: `?site=saint-sorlin` (Saint-Sorlin-d'Arves, village 1,550 m / Les Perrons 2,582 m,
+top of the Trois Lacs chairlift) and `?site=saint-jean` (Saint-Jean-d'Arves, 1,550 m / Pointe du Corbier 2,265 m) were
+added. The pill switch became a drop-down `<select id="site-switch">` (four names don't fit on a phone). Adding a
+resort = a `RESORTS` entry + its cams in `CAMS` + an option in the select + a line in the <head> script +
+`manifest-<id>.webmanifest` + `SITE_ID=<id> node scripts/update-climate.mjs`; the workflow loops over `SITE_IDS`.
+`avaMassif` (default 'Maurienne') = massif of the relayed danger level; Saint-Sorlin has `null` (card hidden) because
+its Étendard side may be in the Grandes Rousses massif — unverified. Their snowpack automatically weights the nearest
+Météo-France stations (Saint-Sorlin 73280001 / 73280402, Saint-Jean 73242003). Webcams (Skaping, with viewers):
+`les-sybelles/saint-sorlin-d-arves/le-rouet` (Les 3 Lacs, 360°) and `les-sybelles/charvin-express/webcam/panoramique`;
+Saint-Sorlin's Chalets de la Balme camera is a Viewsurf one (pv.viewsurf.com/?id=58), not used.
+
 ## Non-negotiables
 
 - **Free and open data only.** No paid APIs, no keys in the page. The only secret is the ECMWF Data Store key,

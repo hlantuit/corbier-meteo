@@ -1,5 +1,5 @@
 // Daily: ERA5 archive at the resort's base elevation and Météo-France snow depth -> data/<resort>/climate.json
-// SITE_ID=toussuire node scripts/update-climate.mjs for La Toussuire (default: Le Corbier, data/climate.json).
+// SITE_ID=<resort id> node scripts/update-climate.mjs for another resort (default: Le Corbier, data/climate.json).
 import { createRequire } from 'node:module';
 import { getJSON, log, writeJSON, fetchStationHourly } from './common.mjs';
 import { SITE } from '../assets/js/config.js';
@@ -10,7 +10,7 @@ const end = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
 const url = `https://archive-api.open-meteo.com/v1/archive?latitude=${SITE.lat}&longitude=${SITE.lon}&elevation=${SITE.base.z}&start_date=1950-01-01&end_date=${end}&daily=snowfall_sum,temperature_2m_mean&models=era5_seamless&timezone=Europe%2FParis`;
 const j = await getJSON(url);
 log(SITE.name, 'archive days:', j.daily.time.length);
-const C = Cc.buildClimate(j.daily);
+const C = Cc.buildClimate(j.daily, { elevation: SITE.base.z });
 
 // Measured snow depth: Le Corbier's own observations (ski season), last four winters.
 // Until this season's first report, the current winter comes from Saint-Jean-d'Arves (automatic, 4 km away).

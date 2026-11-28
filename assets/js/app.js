@@ -168,8 +168,8 @@ function renderNow() {
     : `${fr() ? 'neige' : 'snow'} 48 h : ${f48} cm`;
   const lastTC = S.obsC ? [...S.obsC].reverse().find(o => o.t !== null && o.t !== undefined) : null;
   const lastTJ = S.obs ? [...S.obs].reverse().find(o => o.t !== null && o.t !== undefined) : null;
-  const lastT = recent(lastTC) && (!lastTJ || lastTC.time >= lastTJ.time - 6 * HOUR) ? { ...lastTC, where: 'Le Corbier' } : (lastTJ ? { ...lastTJ, where: "St-Jean-d'Arves" } : null);
-  $('now-foot').textContent = lastT ? `${t('now.observed')} : ${fmt(lastT.t, 1)} °C ${fr() ? 'à' : 'at'} ${lastT.where} (${ago(lastT.time)}). ${fr() ? 'Modèles : ' : 'Models: '}${Object.keys(S.fc.series).length}.` : '';
+  const lastT = recent(lastTC) && (!lastTJ || lastTC.time >= lastTJ.time - 6 * HOUR) ? { ...lastTC, where: fr() ? 'au Corbier' : 'at Le Corbier' } : (lastTJ ? { ...lastTJ, where: fr() ? "à St-Jean-d'Arves" : "at St-Jean-d'Arves" } : null);
+  $('now-foot').textContent = lastT ? `${t('now.observed')} : ${fmt(lastT.t, 1)} °C ${lastT.where} (${ago(lastT.time)}). ${fr() ? 'Modèles : ' : 'Models: '}${Object.keys(S.fc.series).length}.` : '';
   const ev = nextSnowEvent(); const box = $('next-snow');
   box.hidden = false;
   if (ev) {
@@ -182,7 +182,7 @@ function renderNow() {
 const RISK_NAME = { fr: ['', 'faible', 'limité', 'marqué', 'fort', 'très fort'], en: ['', 'low', 'moderate', 'considerable', 'high', 'very high'] };
 function renderResort() {
   const R = S.resort, box = $('resort'); if (!box) return;
-  if (!R || !R.stations || !R.stations.length || Date.now() - Date.parse(R.fetched) > 2 * 24 * HOUR) { box.hidden = true; return; }
+  if (!SITE.avaMassif || !R || !R.stations || !R.stations.length || Date.now() - Date.parse(R.fetched) > 2 * 24 * HOUR) { box.hidden = true; return; }
   const st = R.stations; const lvl = st.map(s => s.avalancheLevel).find(v => v);
   $('ava').className = 'ava' + (lvl ? ` l${lvl}` : ''); $('ava-n').textContent = lvl || '–';
   $('resort-t1').textContent = lvl
@@ -699,10 +699,9 @@ async function renderAll() {
 // Resort identity in the header; the switch keeps the section the reader is looking at
 function initSite() {
   $('brand-name').textContent = SITE.name; $('brand').setAttribute('aria-label', SITE.name);
-  document.querySelectorAll('#site-switch a').forEach(a => {
-    if (a.dataset.site === SITE.id) a.setAttribute('aria-current', 'page');
-    a.addEventListener('click', () => { a.href = a.getAttribute('href').split('#')[0] + location.hash; });
-  });
+  const sel = $('site-switch'); if (!sel) return;
+  sel.value = SITE.id;
+  sel.addEventListener('change', () => { location.href = './' + (sel.value === 'corbier' ? '' : `?site=${sel.value}`) + location.hash; });
 }
 
 async function main() {

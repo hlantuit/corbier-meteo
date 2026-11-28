@@ -62,8 +62,9 @@ jobs:
         if: contains(format(' {0} ', steps.plan.outputs.what), ' all ') || contains(format(' {0} ', steps.plan.outputs.what), ' climate ')
         continue-on-error: true
         run: |
-          node scripts/update-climate.mjs
-          SITE_ID=toussuire node scripts/update-climate.mjs
+          for s in $(node -e "import('./assets/js/config.js').then(m => console.log(m.SITE_IDS.join(' ')))"); do
+            SITE_ID=$s node scripts/update-climate.mjs || echo "::warning::climate failed for $s"
+          done
 
       - name: Model verification (about 6 minutes)
         if: contains(format(' {0} ', steps.plan.outputs.what), ' all ') || contains(format(' {0} ', steps.plan.outputs.what), ' verification ')
@@ -110,8 +111,9 @@ jobs:
           AI_MODEL: ${{ vars.AI_MODEL }}
           AI_PROVIDER: ${{ vars.AI_PROVIDER }}
         run: |
-          node scripts/update-bulletin.mjs
-          SITE_ID=toussuire node scripts/update-bulletin.mjs
+          for s in $(node -e "import('./assets/js/config.js').then(m => console.log(m.SITE_IDS.join(' ')))"); do
+            SITE_ID=$s node scripts/update-bulletin.mjs || echo "::warning::bulletin failed for $s"
+          done
 
       - name: Commit
         run: |

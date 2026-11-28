@@ -45,7 +45,53 @@ const RESORTS = {
     camsPage: 'https://la-toussuire.com/info-live/webcams/',
     dataDir: 'toussuire/',
   },
+  'saint-sorlin': {
+    id: 'saint-sorlin', name: "Saint-Sorlin-d'Arves", short: "St-Sorlin-d'Arves", app: 'St-Sorlin Météo',
+    at: { fr: "à Saint-Sorlin-d'Arves", en: "at Saint-Sorlin-d'Arves" }, of: { fr: "de Saint-Sorlin-d'Arves", en: "of Saint-Sorlin-d'Arves" },
+    // Village centre (IGN BD TOPO, 1,526 m); the ski area rises to the Perrons (top of the Trois Lacs chairlift)
+    lat: 45.2208, lon: 6.2285, elev: 1550,
+    base: { z: 1550, name: "Saint-Sorlin-d'Arves" },
+    top: { z: 2582, name: 'Les Perrons', short: 'Les Perrons' },
+    low: { z: 1300, name: 'Fond de vallée' },
+    levels: [
+      { z: 1300, fr: "Fond de vallée", en: 'Valley floor' },
+      { z: 1550, fr: "Saint-Sorlin", en: "Saint-Sorlin" },
+      { z: 2090, fr: 'Les Choseaux', en: 'Les Choseaux' },
+      { z: 2430, fr: "L'Ouillon", en: "L'Ouillon" },
+      { z: 2582, fr: 'Les Perrons', en: 'Les Perrons' },
+    ],
+    map: { center: [6.2150, 45.2230], zoom: 12.7 },
+    resortPage: { fr: 'https://www.saintsorlindarves.com/', en: 'https://www.saintsorlindarves.com/' },
+    camsPage: 'https://www.sybelles.ski/webcams/',
+    // the Étendard/Perrons side may belong to the Grandes Rousses avalanche massif: no danger level shown
+    // rather than Maurienne's (the only one available, via le-corbier.com)
+    avaMassif: null,
+    dataDir: 'saint-sorlin/',
+  },
+  'saint-jean': {
+    id: 'saint-jean', name: "Saint-Jean-d'Arves", short: "St-Jean-d'Arves", app: 'St-Jean Météo',
+    at: { fr: "à Saint-Jean-d'Arves", en: "at Saint-Jean-d'Arves" }, of: { fr: "de Saint-Jean-d'Arves", en: "of Saint-Jean-d'Arves" },
+    // Village centre (IGN BD TOPO, 1,534 m; La Chal, where the lifts start, ~1,550 m); the sector climbs to the
+    // ridge of the Pointe du Corbier, shared with Le Corbier
+    lat: 45.2065, lon: 6.2730, elev: 1550,
+    base: { z: 1550, name: "Saint-Jean-d'Arves" },
+    top: { z: 2265, name: 'Pointe du Corbier', short: 'Pte du Corbier' },
+    low: { z: 1300, name: 'Fond de vallée' },
+    levels: [
+      { z: 1300, fr: 'Fond de vallée', en: 'Valley floor' },
+      { z: 1550, fr: 'Saint-Jean', en: 'Saint-Jean' },
+      { z: 1900, fr: 'Mi-pentes', en: 'Mid-slopes' },
+      { z: 2265, fr: 'Pointe du Corbier', en: 'Pointe du Corbier' },
+      { z: 2430, fr: "L'Ouillon", en: "L'Ouillon" },
+    ],
+    map: { center: [6.2620, 45.2170], zoom: 12.7 },
+    resortPage: { fr: 'https://www.sybelles.ski/', en: 'https://www.sybelles.ski/en/' },
+    camsPage: 'https://www.sybelles.ski/webcams/',
+    dataDir: 'saint-jean/',
+  },
 };
+// Avalanche massif of each resort (danger level relayed by le-corbier.com, Maurienne); null = not shown
+for (const r of Object.values(RESORTS)) if (!('avaMassif' in r)) r.avaMassif = 'Maurienne';
 export const SITE_IDS = Object.keys(RESORTS);
 const pickId = () => {
   let id = null;
@@ -162,7 +208,14 @@ const TOUSSUIRE_CAMS = [
   { id: 'turc', link: TOUSSUIRE_LINK, fr: 'Pierre de Turc', en: 'Pierre de Turc', subFr: 'La Toussuire · sur les pistes', subEn: 'La Toussuire · on the slopes', path: 'toussuire/pierre-du-turc', step: 20, offset: 0 },
   { id: 'ouillon', page: 'https://www.skaping.com/les-sybelles/ouillon', fr: 'L’Ouillon', en: 'L’Ouillon', subFr: '2 426 m · sommet des Sybelles', subEn: '2,426 m · top of Les Sybelles', path: 'les-sybelles/ouillon', step: 10, offset: 0 },
 ];
-export const CAMS = R.id === 'toussuire' ? TOUSSUIRE_CAMS : CORBIER_CAMS;
+// Saint-Sorlin and Saint-Jean: Skaping panoramas at the top of their chairlifts (listed on sybelles.ski/webcams/)
+const SORLIN_CAMS = [
+  { id: 'rouet', page: 'https://www.skaping.com/les-sybelles/saint-sorlin-d-arves/le-rouet', fr: 'Les 3 Lacs', en: 'Les 3 Lacs', subFr: 'Saint-Sorlin · haut du domaine, 360°', subEn: 'Saint-Sorlin · top of the ski area, 360°', path: 'les-sybelles/saint-sorlin-d-arves/le-rouet', step: 10, offset: 0 },
+  { id: 'charvin', page: 'https://www.skaping.com/les-sybelles/charvin-express/panoramique', fr: 'Charvin Express', en: 'Charvin Express', subFr: "Saint-Jean-d'Arves · vue sur les Aiguilles d’Arves", subEn: "Saint-Jean-d'Arves · view of the Aiguilles d’Arves", path: 'les-sybelles/charvin-express/webcam/panoramique', step: 10, offset: 0 },
+  { id: 'ouillon', page: 'https://www.skaping.com/les-sybelles/ouillon', fr: 'L’Ouillon', en: 'L’Ouillon', subFr: '2 426 m · sommet des Sybelles', subEn: '2,426 m · top of Les Sybelles', path: 'les-sybelles/ouillon', step: 10, offset: 0 },
+];
+const JEAN_CAMS = [SORLIN_CAMS[1], SORLIN_CAMS[0], SORLIN_CAMS[2], CORBIER_CAMS[2]];
+export const CAMS = { toussuire: TOUSSUIRE_CAMS, 'saint-sorlin': SORLIN_CAMS, 'saint-jean': JEAN_CAMS }[R.id] || CORBIER_CAMS;
 export const SKAPING_S3 = 'https://skaping.s3.gra.io.cloud.ovh.net/';
 
 export const API = {

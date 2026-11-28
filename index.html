@@ -14,20 +14,25 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Corbier Météo">
-  <!-- ?site=toussuire: La Toussuire's page (its own title, home-screen name and manifest), before anything loads -->
+  <!-- ?site=…: another resort's page (its own title, home-screen name and manifest), before anything loads -->
   <script>
     (function () {
-      var s = new URLSearchParams(location.search).get('site');
-      if (s !== 'toussuire') return;
-      document.title = 'La Toussuire — neige & météo';
-      document.querySelector('link[rel=manifest]').href = 'manifest-toussuire.webmanifest';
-      document.querySelector('meta[name=apple-mobile-web-app-title]').content = 'Toussuire Météo';
-      document.querySelector('meta[name=description]').content = 'Observatoire neige et météo de La Toussuire (Savoie, Les Sybelles) : prévisions multi-modèles vérifiées localement, ensembles, saison, relief LiDAR et archives.';
+      var S = {
+        'toussuire': ['La Toussuire', 'Toussuire Météo', 'de La Toussuire'],
+        'saint-sorlin': ["Saint-Sorlin-d'Arves", 'St-Sorlin Météo', "de Saint-Sorlin-d'Arves"],
+        'saint-jean': ["Saint-Jean-d'Arves", 'St-Jean Météo', "de Saint-Jean-d'Arves"]
+      };
+      var s = new URLSearchParams(location.search).get('site'), r = S[s];
+      if (!r) return;
+      document.title = r[0] + ' — neige & météo';
+      document.querySelector('link[rel=manifest]').href = 'manifest-' + s + '.webmanifest';
+      document.querySelector('meta[name=apple-mobile-web-app-title]').content = r[1];
+      document.querySelector('meta[name=description]').content = 'Observatoire neige et météo ' + r[2] + ' (Savoie, Les Sybelles) : prévisions multi-modèles vérifiées localement, ensembles, saison, relief LiDAR et archives.';
     })();
   </script>
   <link rel="preload" href="assets/fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="vendor/maplibre-gl.css">
-  <link rel="stylesheet" href="assets/css/app.css?v=202611271655">
+  <link rel="stylesheet" href="assets/css/app.css?v=202611281003">
 </head>
 <body>
   <header class="topbar">
@@ -52,10 +57,15 @@
       <a href="#cams" data-i18n="nav.cams">Webcams</a>
       <a href="#archive" data-i18n="nav.archive">Archives</a>
     </nav>
-    <nav class="site-switch" id="site-switch" aria-label="Station / Resort">
-      <a href="./" data-site="corbier">Le Corbier</a>
-      <a href="./?site=toussuire" data-site="toussuire">La Toussuire</a>
-    </nav>
+    <label class="site-switch">
+      <span class="sr-only">Station / Resort</span>
+      <select id="site-switch">
+        <option value="corbier">Le Corbier</option>
+        <option value="toussuire">La Toussuire</option>
+        <option value="saint-sorlin">St-Sorlin-d'Arves</option>
+        <option value="saint-jean">St-Jean-d'Arves</option>
+      </select>
+    </label>
     <div class="lang" role="group" aria-label="Langue / Language">
       <button type="button" data-lang="fr" aria-pressed="true">FR</button>
       <button type="button" data-lang="en" aria-pressed="false">EN</button>
@@ -279,17 +289,17 @@
   <script type="importmap">
 {
     "imports": {
-      "./assets/js/app.js": "./assets/js/app.js?v=202611271655",
-      "./assets/js/bulletin.js": "./assets/js/bulletin.js?v=202611271655",
-      "./assets/js/charts.js": "./assets/js/charts.js?v=202611271655",
-      "./assets/js/config.js": "./assets/js/config.js?v=202611271655",
-      "./assets/js/data.js": "./assets/js/data.js?v=202611271655",
-      "./assets/js/i18n.js": "./assets/js/i18n.js?v=202611271655",
-      "./assets/js/map.js": "./assets/js/map.js?v=202611271655",
-      "./assets/js/snowpack.js": "./assets/js/snowpack.js?v=202611271655"
+      "./assets/js/app.js": "./assets/js/app.js?v=202611281003",
+      "./assets/js/bulletin.js": "./assets/js/bulletin.js?v=202611281003",
+      "./assets/js/charts.js": "./assets/js/charts.js?v=202611281003",
+      "./assets/js/config.js": "./assets/js/config.js?v=202611281003",
+      "./assets/js/data.js": "./assets/js/data.js?v=202611281003",
+      "./assets/js/i18n.js": "./assets/js/i18n.js?v=202611281003",
+      "./assets/js/map.js": "./assets/js/map.js?v=202611281003",
+      "./assets/js/snowpack.js": "./assets/js/snowpack.js?v=202611281003"
     }
   }
   </script>
-  <script type="module" src="assets/js/app.js?v=202611271655"></script>
+  <script type="module" src="assets/js/app.js?v=202611281003"></script>
 </body>
 </html>
